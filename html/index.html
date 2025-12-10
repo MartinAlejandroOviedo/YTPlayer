@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YT TUI Mock</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #111827;
+      --surface-2: #1f2937;
+      --accent: #22d3ee;
+      --warn: #f59e0b;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --panel: #1e2535;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .app {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 12px;
+      gap: 12px;
+    }
+    header, footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: var(--surface-2);
+      border: 1px solid var(--accent);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 3fr 1fr;
+      gap: 12px;
+      height: calc(100vh - 120px);
+      min-height: 480px;
+    }
+    .left, .right {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--panel);
+      border: 1px solid var(--accent);
+      padding: 10px;
+    }
+    .top-menu {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .top-menu select, .top-menu button {
+      height: 36px;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: var(--surface-2);
+      color: var(--text);
+      padding: 0 10px;
+    }
+    .top-menu button.quit {
+      border-color: var(--warn);
+      background: #2b1a07;
+    }
+    .search-area {
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .search-input {
+      display: flex;
+      gap: 8px;
+    }
+    .search-input input {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid var(--surface-2);
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .search-input button {
+      padding: 8px 12px;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #0b1220;
+      border-radius: 6px;
+    }
+    .status { color: var(--muted); font-size: 12px; }
+    .transport {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+    .transport button {
+      min-width: 72px;
+      height: 36px;
+      border: 1px solid var(--accent);
+      background: var(--surface-2);
+      color: var(--text);
+      border-radius: 6px;
+    }
+    .transport .play { background: var(--accent); color: #0b1220; }
+    .transport .stop { border-color: var(--warn); background: #2b1a07; }
+    .results {
+      flex: 1;
+      overflow: auto;
+      border: 1px solid var(--surface-2);
+      background: var(--surface);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    thead { background: var(--surface-2); }
+    th, td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--surface-2);
+      text-align: left;
+    }
+    tr:nth-child(even) { background: #0f192d; }
+    tr.active { background: #123456; }
+    .right {
+      max-height: 100%;
+    }
+    .cover {
+      border: 1px solid var(--accent);
+      min-height: 170px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface-2);
+    }
+    .now-playing { line-height: 1.4; font-size: 13px; }
+    .progress {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .progress-bar {
+      height: 6px;
+      background: var(--surface-2);
+      border: 1px solid var(--accent);
+      position: relative;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-bar .fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 30%;
+      background: var(--accent);
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .sparkline {
+      height: 60px;
+      border: 1px solid var(--accent);
+      background: var(--surface-2);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>YT TUI Mock</div>
+      <div class="status">Clock / Status</div>
+    </header>
+    <div class="layout">
+      <div class="left">
+        <div class="top-menu">
+          <select id="audio-select">
+            <option>Auto</option>
+            <option>Device A</option>
+          </select>
+          <button class="quit" id="quit-btn">Salir</button>
+        </div>
+        <div class="search-area" id="search-area">
+          <div>Busca en YouTube Music</div>
+          <div class="search-input">
+            <input id="query" placeholder="Escribe tu consulta y Enter" />
+            <button id="search-btn">Buscar</button>
+          </div>
+          <div class="status" id="status">Estado...</div>
+        </div>
+        <div class="transport" id="transport">
+          <button id="btn-prev">&lt;&lt;</button>
+          <button id="btn-play" class="play">Play</button>
+          <button id="btn-stop" class="stop">Stop</button>
+          <button id="btn-next">&gt;&gt;</button>
+        </div>
+        <div class="results">
+          <table>
+            <thead>
+              <tr><th>Titulo</th><th>Artista</th><th>Album</th><th>Duracion</th></tr>
+            </thead>
+            <tbody>
+              <tr class="active"><td>Like a Prayer</td><td>Madonna</td><td>Like a Prayer</td><td>5:41</td></tr>
+              <tr><td>La Isla Bonita</td><td>Madonna</td><td>True Blue</td><td>4:04</td></tr>
+              <tr><td>Hung Up</td><td>Madonna</td><td>Confessions</td><td>5:36</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="right" id="right">
+        <div class="title">Player</div>
+        <div class="cover" id="cover">Sin cover</div>
+        <div class="now-playing" id="now-playing">
+          <div>Titulo: Like a Prayer</div>
+          <div>Artista: Madonna</div>
+          <div>Album: Like a Prayer</div>
+          <div>Duracion: 5:41</div>
+        </div>
+        <div class="progress">
+          <div id="progress-label">00:00 / --:--</div>
+          <div class="progress-bar"><div class="fill"></div></div>
+        </div>
+        <div class="status" id="volume-display">Volumen: 85%</div>
+        <div class="controls" id="controls">
+          <button id="vol-down">Vol -</button>
+          <button id="vol-up">Vol +</button>
+          <button id="seek-back">&lt;&lt; 5s</button>
+          <button id="seek-forward">&gt;&gt; 5s</button>
+        </div>
+        <div class="sparkline" id="visualizer">[sparkline]</div>
+      </div>
+    </div>
+    <footer>
+      <div>Footer / Bindings</div>
+      <div>Status</div>
+    </footer>
+  </div>
+</body>
+</html>

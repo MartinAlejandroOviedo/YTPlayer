@@ -18,136 +18,19 @@ from textual.widgets import (
     Sparkline,
     Static,
 )
-from PIL import Image as PILImage
-from rich.text import Text
-
+from textual_image.widget import AutoImage as TImage
 from modules.models import SearchResult
 from modules.player import MPVController
 from modules.yt_client import YouTubeMusicClient
 from modules.visualizer import Visualizer
 from textual.widgets import DataTable
+from themes import get_theme_css
 
 
 class YouTubeMusicSearch(App):
     """Pequena app Textual para buscar en YouTube Music."""
 
-    CSS = """
-    Screen {
-        align: center top;
-        background: #0f172a;
-        color: #e5e7eb;
-    }
-    #layout {
-        width: 100%;
-        height: 1fr;
-    }
-    #left {
-        width: 1fr;
-    }
-    #right {
-        width: 32;
-        min-width: 28;
-        background: #111827;
-        border: solid #22d3ee;
-        padding: 1 1;
-        height: 1fr;
-    }
-    #search-area {
-        width: 100%;
-        padding: 1 1;
-        background: #111827;
-        border: solid #22d3ee;
-        border-title-color: #22d3ee;
-    }
-    #status {
-        color: #9ca3af;
-        padding: 0 2;
-    }
-    #left Container {
-        margin-bottom: 1;
-    }
-    #top-menu {
-        padding: 0 2;
-        height: 3;
-        align: center middle;
-    }
-    #top-menu Select {
-        width: 32;
-    }
-    #quit-btn {
-        width: 10;
-        border: solid #f59e0b;
-        color: #e5e7eb;
-        background: #2b1a07;
-    }
-    #results {
-        height: 1fr;
-        border: solid #1f2937;
-    }
-    #now-playing {
-        height: 5;
-        content-align: left top;
-        color: #e5e7eb;
-    }
-    #cover {
-        height: 16;
-        border: solid #22d3ee;
-        content-align: left top;
-        overflow: hidden;
-    }
-    #visualizer {
-        height: 5;
-        background: #111827;
-        padding: 0 1;
-        border: solid #22d3ee;
-    }
-    #progress-block {
-        padding: 0 0 1 0;
-        height: 3;
-    }
-    #controls {
-        padding: 1 0;
-        height: 6;
-        content-align: left top;
-    }
-    #controls Button {
-        margin: 0 1 0 0;
-    }
-    #volume-display {
-        padding: 0 0 1 0;
-    }
-    #transport {
-        width: 100%;
-        padding: 0 1;
-        content-align: center middle;
-    }
-    #transport Button {
-        width: 8;
-        height: 3;
-        border: solid #22d3ee;
-        margin: 0 2;
-        content-align: center middle;
-        background: #1f2937;
-        color: #e5e7eb;
-    }
-    Button {
-        border: solid #22d3ee;
-        background: #1f2937;
-        color: #e5e7eb;
-    }
-    #btn-play {
-        background: #22d3ee;
-        color: #0b1220;
-    }
-    #btn-stop {
-        border: solid #f59e0b;
-        color: #e5e7eb;
-        background: #2b1a07;
-    }
-    #btn-prev, #btn-next {
-        color: #e5e7eb;
-    }
-    """
+    CSS = get_theme_css("dark")
 
     BINDINGS = [
         ("ctrl+c", "quit", "Salir"),
@@ -569,12 +452,11 @@ class YouTubeMusicSearch(App):
     async def _load_cover_async(self, url: str) -> None:
         try:
             data = await asyncio.to_thread(self._fetch_image_bytes, url)
-            text = await asyncio.to_thread(self._pixelate_to_text, data)
         except Exception as exc:  # noqa: BLE001
             self._set_status(f"Cover error: {exc}")
             return
         try:
-            self.call_from_thread(self._update_cover_widget, text)
+            self.call_from_thread(self._update_cover_widget, data)
             self.call_from_thread(self._set_status, "Cover cargada")
         except Exception:
             pass
@@ -585,27 +467,24 @@ class YouTubeMusicSearch(App):
         resp.raise_for_status()
         return resp.content
 
-    def _pixelate_to_text(self, data: bytes) -> Text:
-        img = PILImage.open(io.BytesIO(data)).convert("RGB")
-        img = img.resize((16, 16), resample=PILImage.Resampling.NEAREST)
-        pixels = img.load()
-        width, height = img.size
-        rich_text = Text()
-        for y in range(height):
-            for x in range(width):
-                r, g, b = pixels[x, y]
-                rich_text.append("██", style=f"rgb({r},{g},{b})")
-            rich_text.append("\n")
-        return rich_text
-
-    def _update_cover_widget(self, text: Text) -> None:
-        cover = self.query_one("#cover", Static)
-        cover.update(text)
+    def _update_cover_widget(self, data: bytes) -> None:
+        cover = self.query_one("#cover", TImage)
+        cover.image = data
+        try:
+            status = self.query_one("#cover-status", Static)
+            status.update("")
+        except Exception:
+            pass
 
     def _reset_cover(self) -> None:
         try:
-            cover = self.query_one("#cover", Static)
-            cover.update("Sin cover")
+            cover = self.query_one("#cover", TImage)
+            cover.image = None
+        except Exception:
+            pass
+        try:
+            status = self.query_one("#cover-status", Static)
+            status.update("Sin cover")
         except Exception:
             pass
 
