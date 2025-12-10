@@ -54,6 +54,32 @@ class MPVController:
         self._player.pause = new_state
         return not new_state  # True si queda reproduciendo
 
+    def list_audio_devices(self) -> list[tuple[str, str]]:
+        """Devuelve lista de dispositivos (name, description)."""
+        if not self._player:
+            raise RuntimeError(self._error or "mpv no inicializado")
+        try:
+            devices = self._player.command("get_property", "audio-device-list") or []
+        except Exception:
+            # Algunos builds pueden no exponer audio-device-list
+            return []
+        parsed = []
+        for dev in devices:
+            name = dev.get("name", "")
+            desc = dev.get("description", name)
+            if name:
+                parsed.append((name, desc))
+        return parsed
+
+    def set_audio_device(self, name: str) -> None:
+        """Configura dispositivo de audio."""
+        if not self._player:
+            raise RuntimeError(self._error or "mpv no inicializado")
+        try:
+            self._player.command("set_property", "audio-device", name)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"audio-device error: {exc}") from exc
+
     def set_volume(self, volume: int) -> int:
         """Ajusta volumen (0-100) y devuelve el valor fijado."""
         vol = max(0, min(100, int(volume)))
@@ -68,6 +94,22 @@ class MPVController:
             raise RuntimeError(self._error or "mpv no inicializado")
         # reference=relative mueve desde la posicion actual.
         self._player.command("seek", seconds, "relative")
+
+    def get_time_info(self) -> tuple[Optional[float], Optional[float]]:
+        """Devuelve (posicion, duracion) en segundos."""
+        if not self._player:
+            return (None, None)
+        try:
+            pos = self._player.command("get_property", "time-pos")
+        except Exception:
+            pos = None
+        try:
+            dur = self._player.command("get_property", "duration")
+        except Exception:
+            dur = None
+        pos_f = float(pos) if pos is not None else None
+        dur_f = float(dur) if dur is not None else None
+        return (pos_f, dur_f)
 
     def sample_energy(self) -> float:
         """Devuelve un estimado 0-1 de energia basada en bitrate y volumen."""

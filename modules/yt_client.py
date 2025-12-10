@@ -20,5 +20,10 @@ class YouTubeMusicClient:
             album = album_info.get("name") or "-"
             duration = item.get("duration") or "-"
             video_id = item.get("videoId") or ""
-            parsed.append(SearchResult(title, artist, album, duration, video_id))
+            thumbs = item.get("thumbnails") or []
+            thumb_url = ""
+            if isinstance(thumbs, list) and thumbs:
+                # tomar el de mayor resolucion (ultimo)
+                thumb_url = thumbs[-1].get("url", "") or thumbs[0].get("url", "")
+            parsed.append(SearchResult(title, artist, album, duration, video_id, thumb_url))
         return parsed

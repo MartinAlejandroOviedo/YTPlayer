@@ -8,6 +8,7 @@ class SearchResult:
     album: str
     duration: str
     video_id: str
+    thumbnail_url: str
 
     @property
     def url(self) -> str:

@@ -1,16 +1,31 @@
 import asyncio
 import math
 import random
+import io
+import requests
 from typing import List, Optional
 from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Button, DataTable, Footer, Header, Input, Static
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    ProgressBar,
+    Select,
+    Sparkline,
+    Static,
+)
+from PIL import Image as PILImage
+from rich.text import Text
 
 from modules.models import SearchResult
 from modules.player import MPVController
 from modules.yt_client import YouTubeMusicClient
 from modules.visualizer import Visualizer
+from textual.widgets import DataTable
 
 
 class YouTubeMusicSearch(App):
@@ -19,6 +34,8 @@ class YouTubeMusicSearch(App):
     CSS = """
     Screen {
         align: center top;
+        background: #0f172a;
+        color: #e5e7eb;
     }
     #layout {
         width: 100%;
@@ -30,33 +47,63 @@ class YouTubeMusicSearch(App):
     #right {
         width: 32;
         min-width: 28;
-        background: $surface;
-        border: heavy $accent;
+        background: #111827;
+        border: solid #22d3ee;
         padding: 1 1;
         height: 1fr;
     }
     #search-area {
         width: 100%;
-        padding: 1 2;
+        padding: 1 1;
+        background: #111827;
+        border: solid #22d3ee;
+        border-title-color: #22d3ee;
     }
     #status {
-        color: #888;
+        color: #9ca3af;
         padding: 0 2;
+    }
+    #left Container {
+        margin-bottom: 1;
+    }
+    #top-menu {
+        padding: 0 2;
+        height: 3;
+        align: center middle;
+    }
+    #top-menu Select {
+        width: 32;
+    }
+    #quit-btn {
+        width: 10;
+        border: solid #f59e0b;
+        color: #e5e7eb;
+        background: #2b1a07;
     }
     #results {
         height: 1fr;
+        border: solid #1f2937;
     }
     #now-playing {
         height: 5;
         content-align: left top;
+        color: #e5e7eb;
+    }
+    #cover {
+        height: 16;
+        border: solid #22d3ee;
+        content-align: left top;
+        overflow: hidden;
     }
     #visualizer {
-        height: 8;
-        background: $boost;
+        height: 5;
+        background: #111827;
         padding: 0 1;
-        overflow: hidden;
-        content-align: left top;
-        text-style: bold;
+        border: solid #22d3ee;
+    }
+    #progress-block {
+        padding: 0 0 1 0;
+        height: 3;
     }
     #controls {
         padding: 1 0;
@@ -71,15 +118,34 @@ class YouTubeMusicSearch(App):
     }
     #transport {
         width: 100%;
-        padding: 1 2;
+        padding: 0 1;
         content-align: center middle;
     }
     #transport Button {
         width: 8;
         height: 3;
-        border: heavy $accent;
+        border: solid #22d3ee;
         margin: 0 2;
         content-align: center middle;
+        background: #1f2937;
+        color: #e5e7eb;
+    }
+    Button {
+        border: solid #22d3ee;
+        background: #1f2937;
+        color: #e5e7eb;
+    }
+    #btn-play {
+        background: #22d3ee;
+        color: #0b1220;
+    }
+    #btn-stop {
+        border: solid #f59e0b;
+        color: #e5e7eb;
+        background: #2b1a07;
+    }
+    #btn-prev, #btn-next {
+        color: #e5e7eb;
     }
     """
 
@@ -107,14 +173,22 @@ class YouTubeMusicSearch(App):
         self._current_index: Optional[int] = None
         self._is_playing: bool = False
         self._visualizer_timer = None
+        self._progress_timer = None
         self._volume: int = 50
         self._seek_step: int = 5
         self._visual_phase: float = 0.0
+        self._audio_devices: list[tuple[str, str]] = []
+        self._selected_device: Optional[str] = None
+        self._spark_data: List[float] = []
+        self._cover_task: Optional[asyncio.Task] = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Horizontal(id="layout"):
             with Vertical(id="left"):
+                with Horizontal(id="top-menu"):
+                    yield Select(options=[], id="audio-select", prompt="Dispositivo audio")
+                    yield Button("Salir", id="quit-btn", variant="default")
                 with Container(id="search-area"):
                     yield Static("Busca en YouTube Music", id="title")
                     with Horizontal():
@@ -128,17 +202,21 @@ class YouTubeMusicSearch(App):
                     yield Button("Play", id="btn-play", variant="primary")
                     yield Button("Stop", id="btn-stop", variant="warning")
                     yield Button(">>", id="btn-next", variant="default")
-                yield DataTable(id="results", zebra_stripes=True)
+                yield DataTable(id="results", zebra_stripes=True, cursor_type="row")
             with Vertical(id="right"):
                 yield Static("Player", id="player-title")
+                yield Static("Sin cover", id="cover")
                 yield Static("Nada en reproduccion.", id="now-playing")
+                with Vertical(id="progress-block"):
+                    yield Static("00:00 / --:--", id="progress-label")
+                    yield ProgressBar(total=100, show_percentage=False, id="progress-bar")
                 yield Static("Volumen: --", id="volume-display")
                 with Horizontal(id="controls"):
                     yield Button("Vol -", id="vol-down", variant="default")
                     yield Button("Vol +", id="vol-up", variant="default")
                     yield Button("<< 5s", id="seek-back", variant="default")
                     yield Button(">> 5s", id="seek-forward", variant="default")
-                yield Static("", id="visualizer")
+                yield Sparkline(id="visualizer")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -146,6 +224,7 @@ class YouTubeMusicSearch(App):
         table.add_columns("Titulo", "Artista", "Album", "Duracion")
         self.query_one(Input).focus()
         self._visualizer_timer = self.set_interval(0.2, self._tick_visualizer, pause=True)
+        self._progress_timer = self.set_interval(0.5, self._tick_progress, pause=False)
         if not self.player.available and self.player.last_error:
             self._set_status(self.player.last_error)
         self._update_volume_display()
@@ -154,6 +233,7 @@ class YouTubeMusicSearch(App):
             self.visualizer.start()
         except Exception as exc:  # noqa: BLE001
             self._set_status(f"Visualizador en fallback: {exc}")
+        self._load_audio_devices()
 
     def action_focus_input(self) -> None:
         self.query_one(Input).focus()
@@ -208,6 +288,26 @@ class YouTubeMusicSearch(App):
     def _set_status(self, message: str) -> None:
         self.query_one("#status", Static).update(message)
 
+    def _load_audio_devices(self) -> None:
+        select = self.query_one("#audio-select", Select)
+        if not self.player.available:
+            select.set_options([("Auto", "auto")])
+            return
+        try:
+            devices = self.player.list_audio_devices()
+        except Exception as exc:  # noqa: BLE001
+            self._set_status("Audio: auto")
+            select.set_options([("Auto", "auto")])
+            return
+        self._audio_devices = devices
+        options = [(desc, name) for name, desc in devices]
+        if not options:
+            options = [("Auto", "auto")]
+        select.set_options(options)
+        # marca el primero como seleccionado
+        select.value = options[0][1]
+        self._selected_device = select.value
+
     def _update_volume_display(self) -> None:
         self.query_one("#volume-display", Static).update(f"Volumen: {self._volume}%")
 
@@ -257,8 +357,7 @@ class YouTubeMusicSearch(App):
         try:
             table.move_cursor(row=new_index, scroll=True)
         except Exception:
-            # As fallback, set cursor manually
-            table.cursor_coordinate = table.coordinate_for_row(new_index)
+            return
         # Si estamos pausados y movemos cursor, actualizamos seleccion actual
         if not self._is_playing:
             self._current_index = new_index
@@ -327,6 +426,7 @@ class YouTubeMusicSearch(App):
         self._set_now_playing(item)
         self._set_status(f"Reproduciendo \"{item.title}\" - {item.artist}")
         self._update_play_button()
+        self._load_cover(item)
 
     def action_toggle_play(self) -> None:
         if isinstance(self.focused, Input):
@@ -372,6 +472,7 @@ class YouTubeMusicSearch(App):
     def _set_now_playing(self, item: SearchResult) -> None:
         text = f"Titulo: {item.title}\nArtista: {item.artist}\nAlbum: {item.album}\nDuracion: {item.duration}"
         self.query_one("#now-playing", Static).update(text)
+        self._reset_progress()
 
     def _stop_playback(self) -> None:
         if not self._current:
@@ -387,13 +488,16 @@ class YouTubeMusicSearch(App):
         if self._visualizer_timer:
             self._visualizer_timer.pause()
         self._set_status("Stop.")
-        self._set_now_playing(SearchResult("Sin titulo", "-", "-", "-", ""))
+        self._set_now_playing(SearchResult("Sin titulo", "-", "-", "-", "", ""))
         self._update_play_button()
+        self._reset_progress()
+        self._reset_visualizer()
+        self._reset_cover()
 
     def _tick_visualizer(self) -> None:
-        visual = self.query_one("#visualizer", Static)
+        spark = self.query_one("#visualizer", Sparkline)
         if not self._is_playing or not self._current:
-            visual.update("\n" * 5)
+            self._reset_visualizer()
             return
         # Energia real desde visualizer si disponible; si no, fallback.
         energy = self.visualizer.get_energy() if self.visualizer else 0.0
@@ -402,32 +506,142 @@ class YouTubeMusicSearch(App):
                 try:
                     energy = self.player.sample_energy()
                 except Exception:
-                    energy = 0.3
+                    energy = 0.0
             else:
-                energy = 0.3
-        base = energy if energy is not None else 0.3
-        self._visual_phase = (self._visual_phase + 0.2) % (2 * math.pi)
-        heights = []
-        for i in range(28):
-            wave = 0.5 + 0.5 * math.sin(self._visual_phase + i * 0.35)
-            jitter = random.uniform(-0.3, 0.3)
-            level = base * 6.5 + wave * 2 + jitter
-            heights.append(min(7, max(0, int(level))))
-        lines = []
-        for level in reversed(range(8)):
-            line = "".join("#" if h > level else " " for h in heights)
-            lines.append(line)
-        visual.update("\n".join(lines))
+                energy = 0.0
+        value = max(0.0, min(1.0, energy))
+        self._spark_data.append(value)
+        self._spark_data = self._spark_data[-80:]
+        spark.data = list(self._spark_data)
+
+    def _reset_visualizer(self) -> None:
+        try:
+            spark = self.query_one("#visualizer", Sparkline)
+            self._spark_data = []
+            spark.data = []
+        except Exception:
+            pass
+
+    def _tick_progress(self) -> None:
+        bar = self.query_one("#progress-bar", ProgressBar)
+        label = self.query_one("#progress-label", Static)
+        if not self._is_playing or not self._current or not self.player.available:
+            bar.progress = 0
+            label.update("00:00 / --:--")
+            return
+        pos, dur = self.player.get_time_info()
+        if pos is None or dur is None or dur <= 0:
+            bar.progress = 0
+            label.update("00:00 / --:--")
+            return
+        percent = max(0.0, min(1.0, pos / dur))
+        bar.progress = int(percent * 100)
+        label.update(f"{self._fmt_time(pos)} / {self._fmt_time(dur)}")
+
+    def _reset_progress(self) -> None:
+        try:
+            self.query_one("#progress-bar", ProgressBar).progress = 0
+            self.query_one("#progress-label", Static).update("00:00 / --:--")
+        except Exception:
+            pass
+
+    @staticmethod
+    def _fmt_time(seconds: float) -> str:
+        try:
+            secs = int(seconds)
+            m, s = divmod(secs, 60)
+            h, m = divmod(m, 60)
+            if h > 0:
+                return f"{h:02d}:{m:02d}:{s:02d}"
+            return f"{m:02d}:{s:02d}"
+        except Exception:
+            return "00:00"
+
+    def _load_cover(self, item: SearchResult) -> None:
+        if self._cover_task:
+            self._cover_task.cancel()
+        if not item.thumbnail_url:
+            self._reset_cover()
+            return
+        self._set_status("Cargando cover...")
+        self._cover_task = asyncio.create_task(self._load_cover_async(item.thumbnail_url))
+
+    async def _load_cover_async(self, url: str) -> None:
+        try:
+            data = await asyncio.to_thread(self._fetch_image_bytes, url)
+            text = await asyncio.to_thread(self._pixelate_to_text, data)
+        except Exception as exc:  # noqa: BLE001
+            self._set_status(f"Cover error: {exc}")
+            return
+        try:
+            self.call_from_thread(self._update_cover_widget, text)
+            self.call_from_thread(self._set_status, "Cover cargada")
+        except Exception:
+            pass
+
+    @staticmethod
+    def _fetch_image_bytes(url: str) -> bytes:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        return resp.content
+
+    def _pixelate_to_text(self, data: bytes) -> Text:
+        img = PILImage.open(io.BytesIO(data)).convert("RGB")
+        img = img.resize((16, 16), resample=PILImage.Resampling.NEAREST)
+        pixels = img.load()
+        width, height = img.size
+        rich_text = Text()
+        for y in range(height):
+            for x in range(width):
+                r, g, b = pixels[x, y]
+                rich_text.append("██", style=f"rgb({r},{g},{b})")
+            rich_text.append("\n")
+        return rich_text
+
+    def _update_cover_widget(self, text: Text) -> None:
+        cover = self.query_one("#cover", Static)
+        cover.update(text)
+
+    def _reset_cover(self) -> None:
+        try:
+            cover = self.query_one("#cover", Static)
+            cover.update("Sin cover")
+        except Exception:
+            pass
 
     def on_unmount(self) -> None:
         try:
             self.visualizer.stop()
         except Exception:
             pass
+        self._update_play_button()
 
     def _update_play_button(self) -> None:
-        btn = self.query_one("#btn-play", Button)
-        btn.label = "Pause" if self._is_playing else "Play"
+        try:
+            btn = self.query_one("#btn-play", Button)
+            btn.label = "Pause" if self._is_playing else "Play"
+        except Exception:
+            return
+
+    @on(Select.Changed, "#audio-select")
+    def _on_audio_changed(self, event: Select.Changed) -> None:
+        if not self.player.available:
+            return
+        new_device = event.value
+        if not new_device or new_device == self._selected_device:
+            return
+        if not isinstance(new_device, str):
+            return
+        try:
+            self.player.set_audio_device(new_device)
+            self._selected_device = new_device
+            self._set_status(f"Audio: {new_device}")
+        except Exception as exc:  # noqa: BLE001
+            self._set_status(f"Error audio device: {exc}")
+
+    @on(Button.Pressed, "#quit-btn")
+    def _on_quit(self, _: Button.Pressed) -> None:
+        self.exit()
 
     @on(Input.Submitted)
     async def _on_input_submitted(self, _: Input.Submitted) -> None:
@@ -436,6 +650,12 @@ class YouTubeMusicSearch(App):
     @on(Button.Pressed, "#search-btn")
     async def _on_search_button(self, _: Button.Pressed) -> None:
         await self.action_search()
+
+    @on(DataTable.RowSelected)
+    def _on_row_selected(self, event: DataTable.RowSelected) -> None:
+        # Ejecuta play al seleccionar fila (click/doble click)
+        self.action_play_selected()
+        self._current_index = event.cursor_row
 
     @on(Button.Pressed, "#vol-up")
     def _on_vol_up(self, _: Button.Pressed) -> None:
