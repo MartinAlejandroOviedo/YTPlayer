@@ -62,6 +62,10 @@ Screen {
     content-align: left top;
     overflow: hidden;
 }
+#cover-status {
+    color: #c49a85;
+    padding: 0 0 1 0;
+}
 #visualizer {
     height: 5;
     background: #2e1717;
