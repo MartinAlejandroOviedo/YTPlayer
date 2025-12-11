@@ -71,39 +71,42 @@ class YouTubeMusicSearch(
         yield Header(show_clock=True)
         with Horizontal(id="layout"):
             with Vertical(id="left"):
-                with Horizontal(id="top-menu"):
-                    yield Select(options=[], id="audio-select", prompt="Dispositivo audio")
-                    yield Button("Salir", id="quit-btn", variant="default")
-                with Container(id="search-area"):
-                    yield Static("Busca en YouTube Music", id="title")
-                    with Horizontal():
-                        yield Input(
-                            placeholder="Escribe tu consulta y Enter", id="query"
-                        )
-                        yield Button("Buscar", id="search-btn", variant="primary")
-                    yield Static("", id="status")
-                with Horizontal(id="transport"):
-                    yield Button("<<", id="btn-prev", variant="default")
-                    yield Button("Play", id="btn-play", variant="primary")
-                    yield Button("Stop", id="btn-stop", variant="warning")
-                    yield Button(">>", id="btn-next", variant="default")
-                yield DataTable(id="results", zebra_stripes=True, cursor_type="row")
+                with Container(id="caja-busqueda"):
+                    with Horizontal(id="top-menu"):
+                        yield Select(options=[], id="audio-select", prompt="Dispositivo audio")
+                        yield Button("Salir", id="quit-btn", variant="default")
+                    with Container(id="search-area"):
+                        yield Static("Busca en YouTube Music", id="title")
+                        with Horizontal():
+                            yield Input(
+                                placeholder="Escribe tu consulta y Enter", id="query"
+                            )
+                            yield Button("Buscar", id="search-btn", variant="primary")
+                        yield Static("", id="status")
+                    with Horizontal(id="transport"):
+                        yield Button("<<", id="btn-prev", variant="default")
+                        yield Button("Play", id="btn-play", variant="primary")
+                        yield Button("Stop", id="btn-stop", variant="warning")
+                        yield Button(">>", id="btn-next", variant="default")
+                with Container(id="caja-listado"):
+                    yield DataTable(id="results", zebra_stripes=True, cursor_type="row")
             with Vertical(id="right"):
-                yield Static("Player", id="player-title")
-                with Vertical(id="cover-block"):
-                    yield TImage(id="cover")
-                    yield Static("Sin cover", id="cover-status")
-                yield Static("Nada en reproduccion.", id="now-playing")
-                with Vertical(id="progress-block"):
-                    yield Static("00:00 / --:--", id="progress-label")
-                    yield ProgressBar(total=100, show_percentage=False, id="progress-bar")
-                yield Static("Volumen: --", id="volume-display")
-                with Horizontal(id="controls"):
-                    yield Button("Vol -", id="vol-down", variant="default")
-                    yield Button("Vol +", id="vol-up", variant="default")
-                    yield Button("<< 5s", id="seek-back", variant="default")
-                    yield Button(">> 5s", id="seek-forward", variant="default")
-                yield Sparkline(id="visualizer")
+                with Container(id="caja-player"):
+                    yield Static("Player", id="player-title")
+                    with Vertical(id="cover-block"):
+                        yield TImage(id="cover")
+                        yield Static("Sin cover", id="cover-status")
+                    yield Static("Nada en reproduccion.", id="now-playing")
+                    with Vertical(id="progress-block"):
+                        yield Static("00:00 / --:--", id="progress-label")
+                        yield ProgressBar(total=100, show_percentage=False, id="progress-bar")
+                    yield Static("Volumen: --", id="volume-display")
+                    with Horizontal(id="controls"):
+                        yield Button("Vol -", id="vol-down", variant="default")
+                        yield Button("Vol +", id="vol-up", variant="default")
+                        yield Button("<< 5s", id="seek-back", variant="default")
+                        yield Button(">> 5s", id="seek-forward", variant="default")
+                    yield Sparkline(id="visualizer")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -201,7 +204,7 @@ class YouTubeMusicSearch(
 
     @on(Button.Pressed, "#btn-play")
     def _on_btn_play(self, _: Button.Pressed) -> None:
-        self.action_play_button()
+        self.action_toggle_play()
 
     @on(Button.Pressed, "#btn-stop")
     def _on_btn_stop(self, _: Button.Pressed) -> None:

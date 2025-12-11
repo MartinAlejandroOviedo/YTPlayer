@@ -25,16 +25,18 @@ class CoverMixin:
         self._cover_task = asyncio.create_task(self._load_cover_async(item.thumbnail_url))
 
     async def _load_cover_async(self, url: str) -> None:
+        task = asyncio.current_task()
         try:
             data = await asyncio.to_thread(self._fetch_image_bytes, url)
+            self._update_cover_widget(data)
+            self._set_status("Cover cargada")
+        except asyncio.CancelledError:
+            return
         except Exception as exc:  # noqa: BLE001
             self._set_status(f"Cover error: {exc}")
-            return
-        try:
-            self.call_from_thread(self._update_cover_widget, data)
-            self.call_from_thread(self._set_status, "Cover cargada")
-        except Exception as exc:
-            self.call_from_thread(self._set_status, f"Cover error: {exc}")
+        finally:
+            if self._cover_task is task:
+                self._cover_task = None
 
     @staticmethod
     def _fetch_image_bytes(url: str) -> bytes:
@@ -74,6 +76,8 @@ class CoverMixin:
         try:
             image = PILImage.open(io.BytesIO(data))
             image.load()
+            image = self._square_crop(image)
+            image.thumbnail((256, 256))
         except Exception as exc:  # noqa: BLE001
             if status:
                 status.update(f"Cover error: {exc}")
@@ -104,3 +108,16 @@ class CoverMixin:
         status = self._get_cover_status_widget()
         if status:
             status.update("Sin cover")
+
+    @staticmethod
+    def _square_crop(image: PILImage.Image) -> PILImage.Image:
+        """Recorta la imagen a un cuadrado centrado."""
+        width, height = image.size
+        if width == height:
+            return image
+        side = min(width, height)
+        left = (width - side) // 2
+        top = (height - side) // 2
+        right = left + side
+        bottom = top + side
+        return image.crop((left, top, right, bottom))
