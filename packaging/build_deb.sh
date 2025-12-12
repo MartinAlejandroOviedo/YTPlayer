@@ -40,6 +40,8 @@ cat > "$BIN_DIR/ytplayer" <<'EOF'
 #!/usr/bin/env bash
 APP_DIR="/usr/lib/ytplayer"
 VENV="$APP_DIR/.venv"
+# Exponer binarios de la venv (yt-dlp) para que mpv los encuentre.
+export PATH="$VENV/bin:$PATH"
 exec "$VENV/bin/python" "$APP_DIR/app.py" "$@"
 EOF
 chmod +x "$BIN_DIR/ytplayer"
