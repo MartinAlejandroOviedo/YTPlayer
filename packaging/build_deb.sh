@@ -8,6 +8,8 @@ PKG_NAME="ytplayer"
 STAGE_DIR="$ROOT/dist/${PKG_NAME}_${VERSION}"
 PREFIX="$STAGE_DIR/usr/lib/${PKG_NAME}"
 BIN_DIR="$STAGE_DIR/usr/bin"
+RELEASES_DIR="$ROOT/releases"
+RELEASE_PKG="$RELEASES_DIR/${PKG_NAME}_${VERSION}.deb"
 
 command -v dpkg-deb >/dev/null || { echo "dpkg-deb requerido"; exit 1; }
 command -v python3 >/dev/null || { echo "python3 requerido"; exit 1; }
@@ -15,6 +17,8 @@ command -v python3 >/dev/null || { echo "python3 requerido"; exit 1; }
 echo "Limpiando staging..."
 rm -rf "$STAGE_DIR"
 mkdir -p "$PREFIX" "$BIN_DIR" "$STAGE_DIR/DEBIAN"
+mkdir -p "$RELEASES_DIR"
+rm -f "$RELEASE_PKG"
 
 echo "Copiando codigo fuente..."
 cp "$ROOT/app.py" "$PREFIX/"
@@ -53,5 +57,5 @@ Description: Reproductor TUI de YouTube Music con Textual + mpv
 EOF
 
 echo "Construyendo paquete..."
-dpkg-deb --build "$STAGE_DIR"
-echo "Listo: dist/${PKG_NAME}_${VERSION}.deb"
+dpkg-deb --build "$STAGE_DIR" "$RELEASE_PKG"
+echo "Listo: $RELEASE_PKG"

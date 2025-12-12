@@ -4,7 +4,19 @@ from typing import List, Optional
 from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Button, DataTable, Footer, Header, Input, ProgressBar, Select, Sparkline, Static
+from textual.widgets import (
+    Button,
+    Checkbox,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    LoadingIndicator,
+    ProgressBar,
+    Select,
+    Sparkline,
+    Static,
+)
 from textual_image.widget import AutoImage as TImage
 
 from modules.models import SearchResult
@@ -66,6 +78,7 @@ class YouTubeMusicSearch(
         self._spark_data: List[float] = []
         self._cover_task: Optional[asyncio.Task] = None
         self._theme_name: str = "dark"
+        self._auto_continue: bool = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -95,12 +108,14 @@ class YouTubeMusicSearch(
                     yield Static("Player", id="player-title")
                     with Vertical(id="cover-block"):
                         yield TImage(id="cover")
+                        yield LoadingIndicator(id="cover-loading")
                         yield Static("Sin cover", id="cover-status")
                     yield Static("Nada en reproduccion.", id="now-playing")
                     with Vertical(id="progress-block"):
                         yield Static("00:00 / --:--", id="progress-label")
                         yield ProgressBar(total=100, show_percentage=False, id="progress-bar")
                     yield Static("Volumen: --", id="volume-display")
+                    yield Checkbox("Continuar", id="auto-continue", value=False)
                     with Horizontal(id="controls"):
                         yield Button("Vol -", id="vol-down", variant="default")
                         yield Button("Vol +", id="vol-up", variant="default")
@@ -118,6 +133,14 @@ class YouTubeMusicSearch(
         if not self.player.available and self.player.last_error:
             self._set_status(self.player.last_error)
         self._update_volume_display()
+        try:
+            self.player.set_end_callback(lambda: self.call_from_thread(self._handle_track_end))
+        except Exception:
+            pass
+        try:
+            self.query_one("#auto-continue", Checkbox).value = self._auto_continue
+        except Exception:
+            pass
         try:
             self.visualizer.start()
         except Exception as exc:  # noqa: BLE001
@@ -217,6 +240,12 @@ class YouTubeMusicSearch(
     @on(Button.Pressed, "#btn-prev")
     def _on_btn_prev(self, _: Button.Pressed) -> None:
         self.action_big_seek_back()
+
+    @on(Checkbox.Changed, "#auto-continue")
+    def _on_auto_continue_changed(self, event: Checkbox.Changed) -> None:
+        self._auto_continue = bool(event.value)
+        msg = "Continuar auto: on" if self._auto_continue else "Continuar auto: off"
+        self._set_status(msg)
 
 
 __all__ = ["YouTubeMusicSearch"]

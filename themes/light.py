@@ -99,6 +99,16 @@ Screen {
     color: #4b5563;
     padding: 0 0 1 0;
 }
+/* Loading cover */
+#cover-loading {
+    padding: 0;
+    margin: 0 0 1 0;
+    color: #3b82f6;
+}
+/* Auto continuar */
+#auto-continue {
+    margin: 0 0 1 0;
+}
 /* Barra de progreso */
 #visualizer {
     height: 5;
@@ -109,6 +119,7 @@ Screen {
 #progress-block {
     padding: 0 0 1 0;
     height: 3;
+    width: 100%;
 }
 /* Controles laterales */
 #controls {

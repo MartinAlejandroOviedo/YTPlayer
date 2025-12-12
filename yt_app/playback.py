@@ -14,6 +14,7 @@ class PlaybackMixin:
     _volume: int
     _seek_step: int
     _is_playing: bool
+    _auto_continue: bool
 
     def _update_volume_display(self) -> None:
         self.query_one("#volume-display", Static).update(f"Volumen: {self._volume}%")
@@ -202,6 +203,16 @@ class PlaybackMixin:
         except Exception:
             pass
 
+    def _handle_track_end(self) -> None:
+        """Callback cuando mpv informa fin de archivo."""
+        self._is_playing = False
+        if self._auto_continue and self._current_index is not None:
+            next_index = self._current_index + 1
+            if 0 <= next_index < len(self._last_results):
+                self._start_playback(self._last_results[next_index], next_index)
+                return
+        self._stop_playback()
+
     def _tick_progress(self) -> None:
         bar = self.query_one("#progress-bar", ProgressBar)
         label = self.query_one("#progress-label", Static)
@@ -209,14 +220,21 @@ class PlaybackMixin:
             bar.progress = 0
             label.update("00:00 / --:--")
             return
-        pos, dur = self.player.get_time_info()
-        if pos is None or dur is None or dur <= 0:
+        pos, dur, percent = self.player.get_time_info()
+        # Derivar porcentaje si faltara pero hay pos/dur.
+        if percent is None and pos is not None and dur and dur > 0:
+            percent = (pos / dur) * 100.0
+        # Validar porcentaje.
+        if percent is not None:
+            percent = max(0.0, min(100.0, percent))
+            bar.progress = int(percent)
+        else:
             bar.progress = 0
+
+        if pos is not None and dur is not None and dur > 0:
+            label.update(f"{self._fmt_time(pos)} / {self._fmt_time(dur)}")
+        else:
             label.update("00:00 / --:--")
-            return
-        percent = max(0.0, min(1.0, pos / dur))
-        bar.progress = int(percent * 100)
-        label.update(f"{self._fmt_time(pos)} / {self._fmt_time(dur)}")
 
     def _reset_progress(self) -> None:
         try:

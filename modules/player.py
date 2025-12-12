@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Callable, Optional
 
 try:
     import mpv  # type: ignore
@@ -13,6 +13,7 @@ class MPVController:
         self._player = None
         self._error: Optional[str] = None
         self._last_log: Optional[str] = None
+        self._end_callback: Optional[Callable[[], None]] = None
         if mpv is None:
             self._error = "libmpv no esta disponible. Instala mpv/libmpv."
             return
@@ -95,21 +96,38 @@ class MPVController:
         # reference=relative mueve desde la posicion actual.
         self._player.command("seek", seconds, "relative")
 
-    def get_time_info(self) -> tuple[Optional[float], Optional[float]]:
-        """Devuelve (posicion, duracion) en segundos."""
+    def get_time_info(self) -> tuple[Optional[float], Optional[float], Optional[float]]:
+        """Devuelve (posicion, duracion, porcentaje)."""
         if not self._player:
-            return (None, None)
+            return (None, None, None)
         try:
             pos = self._player.command("get_property", "time-pos")
         except Exception:
-            pos = None
+            try:
+                pos = getattr(self._player, "time_pos", None)
+            except Exception:
+                pos = None
         try:
             dur = self._player.command("get_property", "duration")
         except Exception:
-            dur = None
+            try:
+                dur = getattr(self._player, "duration", None)
+            except Exception:
+                dur = None
+        try:
+            percent = self._player.command("get_property", "percent-pos")
+        except Exception:
+            percent = None
+
         pos_f = float(pos) if pos is not None else None
         dur_f = float(dur) if dur is not None else None
-        return (pos_f, dur_f)
+        percent_f = float(percent) if percent is not None else None
+
+        # Si hay duracion y porcentaje pero no posicion, derivarla.
+        if pos_f is None and dur_f is not None and percent_f is not None:
+            pos_f = max(0.0, min(dur_f, dur_f * (percent_f / 100.0)))
+
+        return (pos_f, dur_f, percent_f)
 
     def sample_energy(self) -> float:
         """Devuelve un estimado 0-1 de energia basada en bitrate y volumen."""
@@ -134,6 +152,10 @@ class MPVController:
         if level.lower() in {"error", "warning"}:
             self._last_log = f"{prefix}: {text}"
 
+    def set_end_callback(self, callback: Callable[[], None]) -> None:
+        """Registra un callback para fin de pista (no en errores)."""
+        self._end_callback = callback
+
     def _register_events(self) -> None:
         if not self._player:
             return
@@ -145,3 +167,10 @@ class MPVController:
             error = getattr(event, "error", None)
             if reason == "error" or error not in (0, None):
                 self._last_log = f"end-file error: reason={reason}, code={error}"
+                return
+            if self._end_callback:
+                try:
+                    self._end_callback()
+                except Exception:
+                    # Evitar romper hilo de mpv
+                    pass

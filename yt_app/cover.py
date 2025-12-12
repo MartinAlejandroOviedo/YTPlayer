@@ -5,6 +5,7 @@ from typing import Optional
 import requests
 from PIL import Image as PILImage
 from textual.widgets import Static
+from textual.widgets._loading_indicator import LoadingIndicator
 from textual_image.widget import AutoImage as TImage
 
 from modules.models import SearchResult
@@ -22,6 +23,7 @@ class CoverMixin:
             self._reset_cover()
             return
         self._set_status("Cargando cover...")
+        self._set_cover_loading(True)
         self._cover_task = asyncio.create_task(self._load_cover_async(item.thumbnail_url))
 
     async def _load_cover_async(self, url: str) -> None:
@@ -37,6 +39,7 @@ class CoverMixin:
         finally:
             if self._cover_task is task:
                 self._cover_task = None
+            self._set_cover_loading(False)
 
     @staticmethod
     def _fetch_image_bytes(url: str) -> bytes:
@@ -70,6 +73,24 @@ class CoverMixin:
             return self.query_one("#cover-status", Static)
         except Exception:
             return None
+
+    def _get_cover_loading_widget(self) -> Optional[LoadingIndicator]:
+        try:
+            return self.query_one("#cover-loading", LoadingIndicator)
+        except Exception:
+            return None
+
+    def _set_cover_loading(self, visible: bool) -> None:
+        indicator = self._get_cover_loading_widget()
+        if not indicator:
+            return
+        try:
+            indicator.display = visible  # type: ignore[attr-defined]
+        except Exception:
+            try:
+                indicator.styles.display = "block" if visible else "none"
+            except Exception:
+                pass
 
     def _update_cover_widget(self, data: bytes) -> None:
         status = self._get_cover_status_widget()
@@ -108,6 +129,7 @@ class CoverMixin:
         status = self._get_cover_status_widget()
         if status:
             status.update("Sin cover")
+        self._set_cover_loading(False)
 
     @staticmethod
     def _square_crop(image: PILImage.Image) -> PILImage.Image:
