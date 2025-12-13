@@ -113,6 +113,10 @@ class PlaybackMixin:
         self._update_play_button()
         self._load_cover(item)
         try:
+            self.player.set_normalizer(getattr(self, "_normalize_volume", False))
+        except Exception:
+            pass
+        try:
             self._load_lyrics(item)
         except Exception:
             pass

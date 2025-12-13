@@ -8,9 +8,10 @@ Reproductor TUI de YouTube Music hecho con Textual y mpv. Busca canciones, muest
 ## Caracteristicas
 - Busqueda rapida de canciones via ytmusicapi (tabla con titulo, artista, album, duracion).
 - Reproduccion en terminal con mpv (play/pause, seek, volumen, continuar siguiente).
+- Pestaña de letras con fetch automatico (YouTube Music + fallback publico) y boton "Usar cookies" para mejorar resultados.
 - Visualizador tipo sparkline (captura audio real con sounddevice; fallback sintentico si no hay).
 - Descarga y muestra cover; fallback a ascii-art si no puede renderizar imagen.
-- Selector de dispositivo de audio, barra de progreso y checkbox de auto-continue.
+- Selector de dispositivo de audio, barra de progreso, checkbox de auto-continue y normalizador de volumen (dynaudnorm en mpv) para igualar niveles entre temas.
 - Temas dinamicos: dark, dracula, caramel, light (Ctrl+1..4).
 
 ## Requisitos del sistema
@@ -35,6 +36,8 @@ python app.py
 - Selecciona una fila y presiona Enter o el boton Play.
 - Cambia tema con Ctrl+1..4, volumen con `-` / `=`, seek con flechas izquierda/derecha.
 - Checkbox "Continuar" avanza automaticamente a la siguiente fila al terminar una pista.
+- Checkbox "Normalizar" aplica dynaudnorm para igualar volumen entre temas.
+- Boton "Usar cookies" permite cargar cookies de YouTube Music para mejorar letras/resultados (coloca cookies.json en `~/.config/ytplayer/` o usa las env vars `YTMUSIC_COOKIES`/`YTMUSIC_COOKIE_FILE`).
 - Selector superior permite elegir dispositivo de audio de mpv.
 
 ### Atajos clave

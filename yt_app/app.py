@@ -89,6 +89,7 @@ class YouTubeMusicSearch(
         self._auto_continue: bool = False
         self._lyrics_task: Optional[asyncio.Task] = None
         self._lyrics_video_id: Optional[str] = None
+        self._normalize_volume: bool = True
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -129,6 +130,7 @@ class YouTubeMusicSearch(
                                 yield ProgressBar(total=100, show_percentage=False, id="progress-bar")
                             yield Static("Volumen: --", id="volume-display")
                             yield Checkbox("Continuar", id="auto-continue", value=False)
+                            yield Checkbox("Normalizar", id="normalize", value=True)
                             with Horizontal(id="controls"):
                                 yield Button("Vol -", id="vol-down", variant="default")
                                 yield Button("Vol +", id="vol-up", variant="default")
@@ -159,6 +161,11 @@ class YouTubeMusicSearch(
             pass
         try:
             self.query_one("#auto-continue", Checkbox).value = self._auto_continue
+        except Exception:
+            pass
+        try:
+            self.query_one("#normalize", Checkbox).value = self._normalize_volume
+            self.player.set_normalizer(self._normalize_volume)
         except Exception:
             pass
         try:
@@ -363,6 +370,16 @@ class YouTubeMusicSearch(
     @on(Button.Pressed, "#vol-down")
     def _on_vol_down(self, _: Button.Pressed) -> None:
         self.action_vol_down()
+
+    @on(Checkbox.Changed, "#normalize")
+    def _on_normalize_changed(self, event: Checkbox.Changed) -> None:
+        self._normalize_volume = bool(event.value)
+        try:
+            self.player.set_normalizer(self._normalize_volume)
+            msg = "Normalizacion activada" if self._normalize_volume else "Normalizacion desactivada"
+            self._set_status(msg)
+        except Exception as exc:  # noqa: BLE001
+            self._set_status(f"Error al ajustar normalizacion: {exc}")
 
     @on(Button.Pressed, "#seek-forward")
     def _on_seek_forward_btn(self, _: Button.Pressed) -> None:

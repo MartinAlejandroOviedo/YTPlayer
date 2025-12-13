@@ -28,6 +28,8 @@ python app.py
 - Selecciona una fila y presiona Enter o el boton Play.
 - Cambia tema con Ctrl+1..4, volumen con `-` / `=`, seek con flechas izquierda/derecha.
 - Checkbox "Continuar" avanza automaticamente a la siguiente fila al terminar una pista.
+- Checkbox "Normalizar" aplica dynaudnorm para igualar volumen entre temas.
+- Boton "Usar cookies" carga cookies de YouTube Music si las ubicas en `~/.config/ytplayer/cookies.json`, en el repo como `cookies.json`, o via `YTMUSIC_COOKIES`/`YTMUSIC_COOKIE_FILE`.
 - Selector superior permite elegir dispositivo de audio de mpv.
 
 ## Atajos clave
@@ -41,7 +43,7 @@ python app.py
 
 ## Controles en pantalla
 - Panel izquierdo: selector de dispositivo y boton Salir, cuadro de busqueda + boton Buscar, barra de transporte (<<, Play/Pause, Stop, >>) y tabla de resultados.
-- Panel derecho: caratula + estado de carga, info de pista actual, progreso y barra, estado de volumen y checkbox Continuar, botonera de volumen, visualizador tipo sparkline.
+- Panel derecho: pestaña Player con caratula + estado de carga, info de pista actual, progreso y barra, estado de volumen, checkboxes Continuar/Normalizar, botonera de volumen, visualizador sparkline. Pestaña Letras con estado, loader y texto de letra.
 
 ## Temas disponibles
 dark (default), dracula, caramel, light. Se aplican al vuelo sin reiniciar.

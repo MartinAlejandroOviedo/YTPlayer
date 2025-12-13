@@ -148,6 +148,18 @@ class MPVController:
         level = max(0.0, min(1.0, normalized_br * (0.5 + volume / 2)))
         return level
 
+    def set_normalizer(self, enabled: bool) -> None:
+        """Activa/desactiva normalizacion de volumen via filtro dynaudnorm."""
+        if not self._player:
+            raise RuntimeError(self._error or "mpv no inicializado")
+        try:
+            if enabled:
+                self._player.command("set_property", "af", "lavfi=[dynaudnorm]")
+            else:
+                self._player.command("set_property", "af", "")
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"af error: {exc}") from exc
+
     def _on_log(self, level: str, prefix: str, text: str) -> None:
         if level.lower() in {"error", "warning"}:
             self._last_log = f"{prefix}: {text}"
