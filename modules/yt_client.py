@@ -1,6 +1,7 @@
 import json
 import os
-from typing import List, Optional
+from pathlib import Path
+from typing import Callable, List, Optional
 from urllib.parse import quote_plus
 from urllib.request import urlopen
 
@@ -15,19 +16,45 @@ class YouTubeMusicClient:
         Inicializa YTMusic. Si hay cookies disponibles (parametro o env YTMUSIC_COOKIES / YTMUSIC_COOKIE_FILE),
         las usa para mejorar resultados (incl. letras). Si fallan, cae a modo sin auth.
         """
+        self._using_cookies: bool = False
+        self.last_lyrics_source: str = ""
         self._yt = self._init_ytmusic(cookies_path)
 
     @staticmethod
-    def _init_ytmusic(cookies_path: Optional[str]) -> YTMusic:
-        # Orden de prioridad: parametro -> env YTMUSIC_COOKIES -> env YTMUSIC_COOKIE_FILE -> fallback sin cookies.
-        candidates = [cookies_path, os.environ.get("YTMUSIC_COOKIES"), os.environ.get("YTMUSIC_COOKIE_FILE")]
+    def _discover_cookies() -> Optional[Path]:
+        """Busca un archivo de cookies en ubicaciones comunes."""
+        candidates: list[Path] = []
+        env_cookie = os.environ.get("YTMUSIC_COOKIES") or os.environ.get("YTMUSIC_COOKIE_FILE")
+        if env_cookie:
+            candidates.append(Path(env_cookie).expanduser())
+        root = Path(__file__).resolve().parent.parent
+        candidates.append(root / "cookies.json")
+        candidates.append(Path.home() / ".config" / "ytplayer" / "cookies.json")
+        candidates.append(Path.home() / ".config" / "ytmusicapi" / "oauth.json")
+        for path in candidates:
+            if path.is_file():
+                return path
+        return None
+
+    def _init_ytmusic(self, cookies_path: Optional[str]) -> YTMusic:
+        # Orden de prioridad: parametro -> env YTMUSIC_COOKIES -> env YTMUSIC_COOKIE_FILE -> discovery -> fallback sin cookies.
+        candidates = [
+            cookies_path,
+            os.environ.get("YTMUSIC_COOKIES"),
+            os.environ.get("YTMUSIC_COOKIE_FILE"),
+        ]
+        discovered = self._discover_cookies()
+        if discovered:
+            candidates.append(str(discovered))
         for candidate in candidates:
             if candidate and os.path.exists(candidate):
                 try:
+                    self._using_cookies = True
                     return YTMusic(candidate)
                 except Exception:
                     continue
         # Fallback sin cookies
+        self._using_cookies = False
         return YTMusic()
 
     def search_songs(self, query: str, limit: int = 20) -> List[SearchResult]:
@@ -51,9 +78,11 @@ class YouTubeMusicClient:
 
     def get_song_lyrics(self, video_id: str, title: Optional[str] = None, artist: Optional[str] = None) -> str | None:
         """Devuelve letra desde YouTube Music, con fallback a API publica si es necesario."""
+        self.last_lyrics_source = ""
         # Primero intentar con YouTube Music.
         lyrics = self._get_ytm_lyrics(video_id)
         if lyrics:
+            self.last_lyrics_source = "YouTube Music"
             return lyrics
         # Fallback publico si tenemos artista y titulo.
         if title and artist:
@@ -79,7 +108,18 @@ class YouTubeMusicClient:
         return None
 
     def _get_public_lyrics(self, title: str, artist: str) -> str | None:
-        """Consulta una API publica (lyrist.vercel.app) para obtener letras."""
+        """Consulta APIs publicas para obtener letras sin cookies."""
+        fetchers: list[Callable[[str, str], Optional[str]]] = [
+            self._get_lyrist_lyrics,
+            self._get_lyrics_ovh,
+        ]
+        for fetch in fetchers:
+            lyrics = fetch(title, artist)
+            if lyrics:
+                return lyrics
+        return None
+
+    def _get_lyrist_lyrics(self, title: str, artist: str) -> Optional[str]:
         try:
             url = f"https://lyrist.vercel.app/api/lyrics/{quote_plus(artist)}/{quote_plus(title)}"
             with urlopen(url, timeout=8) as resp:
@@ -89,6 +129,23 @@ class YouTubeMusicClient:
             if isinstance(data, dict):
                 text = data.get("lyrics")
                 if text:
+                    self.last_lyrics_source = "Lyrist API"
+                    return text
+        except Exception:
+            return None
+        return None
+
+    def _get_lyrics_ovh(self, title: str, artist: str) -> Optional[str]:
+        try:
+            url = f"https://api.lyrics.ovh/v1/{quote_plus(artist)}/{quote_plus(title)}"
+            with urlopen(url, timeout=8) as resp:
+                if resp.status != 200:
+                    return None
+                data = json.loads(resp.read().decode("utf-8", "ignore"))
+            if isinstance(data, dict):
+                text = data.get("lyrics")
+                if text:
+                    self.last_lyrics_source = "lyrics.ovh"
                     return text
         except Exception:
             return None

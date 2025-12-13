@@ -65,7 +65,10 @@ class YouTubeMusicSearch(
 
     def __init__(self) -> None:
         super().__init__()
-        self.ytmusic = YouTubeMusicClient()
+        # Intenta usar cookies automaticamente si existen.
+        detected = self._find_cookies_file()
+        self._cookies_path: Optional[str] = str(detected) if detected else None
+        self.ytmusic = YouTubeMusicClient(self._cookies_path)
         self.player = MPVController()
         self.visualizer = Visualizer(mpv_player=self.player._player)
         self._current_worker: Optional[asyncio.Task] = None
@@ -86,7 +89,6 @@ class YouTubeMusicSearch(
         self._auto_continue: bool = False
         self._lyrics_task: Optional[asyncio.Task] = None
         self._lyrics_video_id: Optional[str] = None
-        self._cookies_path: Optional[str] = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -188,18 +190,7 @@ class YouTubeMusicSearch(
         self.query_one("#status", Static).update(message)
 
     def _find_cookies_file(self) -> Optional[Path]:
-        candidates: list[Path] = []
-        env_cookie = os.environ.get("YTMUSIC_COOKIES") or os.environ.get("YTMUSIC_COOKIE_FILE")
-        if env_cookie:
-            candidates.append(Path(env_cookie).expanduser())
-        root = Path(__file__).resolve().parent.parent
-        candidates.append(root / "cookies.json")
-        candidates.append(Path.home() / ".config" / "ytplayer" / "cookies.json")
-        candidates.append(Path.home() / ".config" / "ytmusicapi" / "oauth.json")
-        for path in candidates:
-            if path.is_file():
-                return path
-        return None
+        return YouTubeMusicClient._discover_cookies()
 
     def _use_cookies(self) -> None:
         path = self._find_cookies_file()
@@ -293,14 +284,16 @@ class YouTubeMusicSearch(
                 return
             if lyrics:
                 self._set_lyrics_text(lyrics)
-                self._set_lyrics_status("Letra cargada.")
+                source = getattr(self.ytmusic, "last_lyrics_source", "") or ""
+                status_msg = f"Letra cargada ({source})." if source else "Letra cargada."
+                self._set_lyrics_status(status_msg)
             else:
                 self._set_lyrics_status("Letra no disponible.")
                 self._show_lyrics_message("Letra no disponible.")
         except asyncio.CancelledError:
             return
         except Exception as exc:  # noqa: BLE001
-            if self._lyrics_video_id == video_id:
+            if self._lyrics_video_id == item.video_id:
                 self._set_lyrics_status(f"Error al obtener letra: {exc}")
                 self._show_lyrics_message("Error al obtener letra.")
         finally:
