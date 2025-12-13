@@ -28,6 +28,8 @@ python app.py
 - Select a row and press Enter or click Play.
 - Switch theme with Ctrl+1..4, adjust volume with `-` / `=`, seek with left/right arrows.
 - "Continuar" checkbox auto-advances to the next row when a track ends.
+- "Normalizar" checkbox applies mpv's dynaudnorm to even out volume between tracks.
+- "Usar cookies" button loads YouTube Music cookies if placed at `~/.config/ytplayer/cookies.json`, repo `cookies.json`, or via `YTMUSIC_COOKIES`/`YTMUSIC_COOKIE_FILE`.
 - Top selector lets you pick the mpv audio device.
 
 ## Key bindings
@@ -41,7 +43,7 @@ python app.py
 
 ## On-screen controls
 - Left panel: audio device selector and Exit button, search box + Search button, transport bar (<<, Play/Pause, Stop, >>), and results table.
-- Right panel: cover art + loading state, now playing info, progress label and bar, volume status and "Continuar" checkbox, volume buttons, sparkline visualizer.
+- Right panel: Player tab with cover art + loading state, now playing info, progress label and bar, volume status, Continuar/Normalizar checkboxes, volume buttons, sparkline visualizer. Lyrics tab with status, loader, and lyrics text.
 
 ## Themes
 dark (default), dracula, caramel, light. Apply instantly without restarting.
