@@ -2,6 +2,9 @@
 
 Reproductor TUI de YouTube Music hecho con Textual y mpv. Busca canciones, muestra covers, visualiza energia en vivo y reproduce usando mpv con yt-dlp.
 
+## Vista previa
+![Vista previa del player](img/Captura%20de%20pantalla_20251212_203710.png)
+
 ## Caracteristicas
 - Busqueda rapida de canciones via ytmusicapi (tabla con titulo, artista, album, duracion).
 - Reproduccion en terminal con mpv (play/pause, seek, volumen, continuar siguiente).
