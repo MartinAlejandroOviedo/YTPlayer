@@ -112,6 +112,10 @@ class PlaybackMixin:
         self._set_status(f"Reproduciendo \"{item.title}\" - {item.artist}")
         self._update_play_button()
         self._load_cover(item)
+        try:
+            self._load_lyrics(item)
+        except Exception:
+            pass
 
     def action_toggle_play(self) -> None:
         if isinstance(self.focused, Input):
@@ -175,6 +179,10 @@ class PlaybackMixin:
         self._reset_progress()
         self._reset_visualizer()
         self._reset_cover()
+        try:
+            self._reset_lyrics()
+        except Exception:
+            pass
 
     def _tick_visualizer(self) -> None:
         spark = self.query_one("#visualizer", Sparkline)

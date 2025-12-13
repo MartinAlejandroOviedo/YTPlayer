@@ -24,6 +24,37 @@ Screen {
     padding: 1 1;
     height: 1fr;
 }
+#right-tabs {
+    width: 100%;
+    height: 1fr;
+}
+#lyrics-tab {
+    height: 1fr;
+}
+#player-tab {
+    height: 1fr;
+}
+#lyrics-content {
+    width: 100%;
+    height: 1fr;
+    padding: 1;
+    background: #f8fafc;
+    border: solid #3b82f6;
+    content-align: left top;
+}
+#lyrics-loading {
+    margin: 0 0 1 0;
+    color: #3b82f6;
+}
+#lyrics-status {
+    color: #4b5563;
+    padding: 0 0 1 0;
+}
+#lyrics-text {
+    height: 1fr;
+    border: solid #e5e7eb;
+    background: #ffffff;
+}
 /* Contenedores mayores */
 #caja-busqueda {
     width: 100%;

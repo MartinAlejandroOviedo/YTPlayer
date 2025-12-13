@@ -1,4 +1,6 @@
 import asyncio
+import os
+from pathlib import Path
 from typing import List, Optional
 
 from textual import on
@@ -16,6 +18,9 @@ from textual.widgets import (
     Select,
     Sparkline,
     Static,
+    TabPane,
+    TabbedContent,
+    Log,
 )
 from textual_image.widget import AutoImage as TImage
 
@@ -79,6 +84,9 @@ class YouTubeMusicSearch(
         self._cover_task: Optional[asyncio.Task] = None
         self._theme_name: str = "dark"
         self._auto_continue: bool = False
+        self._lyrics_task: Optional[asyncio.Task] = None
+        self._lyrics_video_id: Optional[str] = None
+        self._cookies_path: Optional[str] = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -88,6 +96,7 @@ class YouTubeMusicSearch(
                     with Horizontal(id="top-menu"):
                         yield Select(options=[], id="audio-select", prompt="Dispositivo audio")
                         yield Button("Salir", id="quit-btn", variant="default")
+                        yield Button("Usar cookies", id="use-cookies", variant="default")
                     with Container(id="search-area"):
                         yield Static("Busca en YouTube Music", id="title")
                         with Horizontal():
@@ -104,22 +113,32 @@ class YouTubeMusicSearch(
                 with Container(id="caja-listado"):
                     yield DataTable(id="results", zebra_stripes=True, cursor_type="row")
             with Vertical(id="right"):
-                with Container(id="caja-player"):
-                    yield Static("Player", id="player-title")
-                    with Vertical(id="cover-block"):
-                        yield TImage(id="cover")
-                        yield LoadingIndicator(id="cover-loading")
-                        yield Static("Sin cover", id="cover-status")
-                    yield Static("Nada en reproduccion.", id="now-playing")
-                    with Vertical(id="progress-block"):
-                        yield Static("00:00 / --:--", id="progress-label")
-                        yield ProgressBar(total=100, show_percentage=False, id="progress-bar")
-                    yield Static("Volumen: --", id="volume-display")
-                    yield Checkbox("Continuar", id="auto-continue", value=False)
-                    with Horizontal(id="controls"):
-                        yield Button("Vol -", id="vol-down", variant="default")
-                        yield Button("Vol +", id="vol-up", variant="default")
-                    yield Sparkline(id="visualizer")
+                with TabbedContent(id="right-tabs"):
+                    with TabPane("Player", id="player-tab"):
+                        with Container(id="caja-player"):
+                            yield Static("Player", id="player-title")
+                            with Vertical(id="cover-block"):
+                                yield TImage(id="cover")
+                                yield LoadingIndicator(id="cover-loading")
+                                yield Static("Sin cover", id="cover-status")
+                            yield Static("Nada en reproduccion.", id="now-playing")
+                            with Vertical(id="progress-block"):
+                                yield Static("00:00 / --:--", id="progress-label")
+                                yield ProgressBar(total=100, show_percentage=False, id="progress-bar")
+                            yield Static("Volumen: --", id="volume-display")
+                            yield Checkbox("Continuar", id="auto-continue", value=False)
+                            with Horizontal(id="controls"):
+                                yield Button("Vol -", id="vol-down", variant="default")
+                                yield Button("Vol +", id="vol-up", variant="default")
+                            yield Sparkline(id="visualizer")
+                    with TabPane("Letras", id="lyrics-tab"):
+                        with Container(id="lyrics-content"):
+                            yield LoadingIndicator(id="lyrics-loading")
+                            yield Static("Sin letra disponible.", id="lyrics-status")
+                            yield Log(
+                                id="lyrics-text",
+                                highlight=False,
+                            )
         yield Footer()
 
     def on_mount(self) -> None:
@@ -131,6 +150,7 @@ class YouTubeMusicSearch(
         if not self.player.available and self.player.last_error:
             self._set_status(self.player.last_error)
         self._update_volume_display()
+        self._reset_lyrics()
         try:
             self.player.set_end_callback(lambda: self.call_from_thread(self._handle_track_end))
         except Exception:
@@ -167,6 +187,138 @@ class YouTubeMusicSearch(
     def _set_status(self, message: str) -> None:
         self.query_one("#status", Static).update(message)
 
+    def _find_cookies_file(self) -> Optional[Path]:
+        candidates: list[Path] = []
+        env_cookie = os.environ.get("YTMUSIC_COOKIES") or os.environ.get("YTMUSIC_COOKIE_FILE")
+        if env_cookie:
+            candidates.append(Path(env_cookie).expanduser())
+        root = Path(__file__).resolve().parent.parent
+        candidates.append(root / "cookies.json")
+        candidates.append(Path.home() / ".config" / "ytplayer" / "cookies.json")
+        candidates.append(Path.home() / ".config" / "ytmusicapi" / "oauth.json")
+        for path in candidates:
+            if path.is_file():
+                return path
+        return None
+
+    def _use_cookies(self) -> None:
+        path = self._find_cookies_file()
+        if not path:
+            self._set_status("No encontre cookies. Coloca cookies.json en ~/.config/ytplayer o en el repo y reintenta.")
+            return
+        try:
+            self.ytmusic = YouTubeMusicClient(str(path))
+            self._cookies_path = str(path)
+            self._set_status(f"Cookies cargadas: {path}")
+            self._reset_lyrics()
+        except Exception as exc:  # noqa: BLE001
+            self._set_status(f"No se pudieron cargar las cookies: {exc}")
+
+    def _get_lyrics_status_widget(self) -> Optional[Static]:
+        try:
+            return self.query_one("#lyrics-status", Static)
+        except Exception:
+            return None
+
+    def _get_lyrics_loader(self) -> Optional[LoadingIndicator]:
+        try:
+            return self.query_one("#lyrics-loading", LoadingIndicator)
+        except Exception:
+            return None
+
+    def _get_lyrics_log(self) -> Optional[Log]:
+        try:
+            return self.query_one("#lyrics-text", Log)
+        except Exception:
+            return None
+
+    def _set_lyrics_loading(self, visible: bool) -> None:
+        loader = self._get_lyrics_loader()
+        if not loader:
+            return
+        try:
+            loader.display = visible  # type: ignore[attr-defined]
+        except Exception:
+            try:
+                loader.styles.display = "block" if visible else "none"
+            except Exception:
+                pass
+
+    def _set_lyrics_status(self, message: str) -> None:
+        status_widget = self._get_lyrics_status_widget()
+        if status_widget:
+            status_widget.update(message)
+
+    def _show_lyrics_message(self, message: str) -> None:
+        log = self._get_lyrics_log()
+        if not log:
+            return
+        try:
+            log.clear()
+            log.write(message)
+        except Exception:
+            pass
+
+    def _reset_lyrics(self, message: str = "Sin letra disponible.") -> None:
+        if self._lyrics_task:
+            self._lyrics_task.cancel()
+            self._lyrics_task = None
+        self._lyrics_video_id = None
+        self._set_lyrics_loading(False)
+        self._set_lyrics_status(message)
+        self._show_lyrics_message(message)
+
+    def _load_lyrics(self, item: SearchResult) -> None:
+        if self._lyrics_task:
+            self._lyrics_task.cancel()
+            self._lyrics_task = None
+        self._lyrics_video_id = item.video_id
+        self._set_lyrics_loading(True)
+        self._set_lyrics_status("Buscando letra...")
+        self._show_lyrics_message("Buscando letra...")
+        if not item.video_id:
+            self._set_lyrics_loading(False)
+            self._set_lyrics_status("Letra no disponible para esta pista.")
+            self._show_lyrics_message("Letra no disponible para esta pista.")
+            return
+        self._lyrics_task = asyncio.create_task(self._load_lyrics_async(item))
+
+    async def _load_lyrics_async(self, item: SearchResult) -> None:
+        task = asyncio.current_task()
+        try:
+            lyrics = await asyncio.to_thread(
+                self.ytmusic.get_song_lyrics, item.video_id, item.title, item.artist
+            )
+            if self._lyrics_video_id != item.video_id:
+                return
+            if lyrics:
+                self._set_lyrics_text(lyrics)
+                self._set_lyrics_status("Letra cargada.")
+            else:
+                self._set_lyrics_status("Letra no disponible.")
+                self._show_lyrics_message("Letra no disponible.")
+        except asyncio.CancelledError:
+            return
+        except Exception as exc:  # noqa: BLE001
+            if self._lyrics_video_id == video_id:
+                self._set_lyrics_status(f"Error al obtener letra: {exc}")
+                self._show_lyrics_message("Error al obtener letra.")
+        finally:
+            if self._lyrics_task is task:
+                self._lyrics_task = None
+            self._set_lyrics_loading(False)
+
+    def _set_lyrics_text(self, lyrics: str) -> None:
+        log = self._get_lyrics_log()
+        if not log:
+            return
+        try:
+            log.clear()
+            for line in lyrics.splitlines():
+                log.write(line)
+        except Exception:
+            self._show_lyrics_message("No se pudo mostrar la letra.")
+
     def on_unmount(self) -> None:
         try:
             self.visualizer.stop()
@@ -194,6 +346,10 @@ class YouTubeMusicSearch(
     def _on_quit(self, _: Button.Pressed) -> None:
         self.exit()
 
+    @on(Button.Pressed, "#use-cookies")
+    def _on_use_cookies(self, _: Button.Pressed) -> None:
+        self._use_cookies()
+
     @on(Input.Submitted)
     async def _on_input_submitted(self, _: Input.Submitted) -> None:
         await self.action_search()
@@ -214,6 +370,14 @@ class YouTubeMusicSearch(
     @on(Button.Pressed, "#vol-down")
     def _on_vol_down(self, _: Button.Pressed) -> None:
         self.action_vol_down()
+
+    @on(Button.Pressed, "#seek-forward")
+    def _on_seek_forward_btn(self, _: Button.Pressed) -> None:
+        self.action_seek_forward()
+
+    @on(Button.Pressed, "#seek-back")
+    def _on_seek_back_btn(self, _: Button.Pressed) -> None:
+        self.action_seek_back()
 
     @on(Button.Pressed, "#btn-play")
     def _on_btn_play(self, _: Button.Pressed) -> None:
