@@ -3,19 +3,22 @@ Screen {
     align: center top;
     background: #f3f4f6;
     color: #0f172a;
+    padding: 1 2;
 }
 /* Layout principal */
 #layout {
     width: 100%;
+    max-width: 120;
     height: 100%;
+    max-height: 48;
 }
 #left {
     width: 1fr;
     height: 1fr;
 }
 #right {
-    width: 34;
-    min-width: 30;
+    width: 40;
+    min-width: 34;
     background: #ffffff;
     border: solid #3b82f6;
     padding: 1 1;
@@ -129,7 +132,7 @@ Screen {
 }
 #controls Button {
     margin: 0 1 0 0;
-    width: 10;
+    width: 6;
 }
 #volume-display {
     padding: 0 0 1 0;

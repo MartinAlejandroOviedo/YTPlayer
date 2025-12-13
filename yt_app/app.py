@@ -119,8 +119,6 @@ class YouTubeMusicSearch(
                     with Horizontal(id="controls"):
                         yield Button("Vol -", id="vol-down", variant="default")
                         yield Button("Vol +", id="vol-up", variant="default")
-                        yield Button("<< 5s", id="seek-back", variant="default")
-                        yield Button(">> 5s", id="seek-forward", variant="default")
                     yield Sparkline(id="visualizer")
         yield Footer()
 
@@ -216,14 +214,6 @@ class YouTubeMusicSearch(
     @on(Button.Pressed, "#vol-down")
     def _on_vol_down(self, _: Button.Pressed) -> None:
         self.action_vol_down()
-
-    @on(Button.Pressed, "#seek-forward")
-    def _on_seek_forward_btn(self, _: Button.Pressed) -> None:
-        self.action_seek_forward()
-
-    @on(Button.Pressed, "#seek-back")
-    def _on_seek_back_btn(self, _: Button.Pressed) -> None:
-        self.action_seek_back()
 
     @on(Button.Pressed, "#btn-play")
     def _on_btn_play(self, _: Button.Pressed) -> None:
