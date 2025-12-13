@@ -6,18 +6,42 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEFAULT_VERSION="0.1.0"
 DEFAULT_MAINTAINER_NAME="Martin Alejandro Oviedo"
 DEFAULT_MAINTAINER_EMAIL="martinoviedo@disroot.org"
-VERSION="${1:-}"
+
+# Permitir setear por env o argumento. Si no hay TTY, usar defaults.
+VERSION="${VERSION:-${1:-}}"
+MAINTAINER_NAME="${MAINTAINER_NAME:-}"
+MAINTAINER_EMAIL="${MAINTAINER_EMAIL:-}"
 PKG_NAME="ytplayer"
 
 if [[ -z "$VERSION" ]]; then
-    read -rp "Ingrese la versión [${DEFAULT_VERSION}]: " version_input
-    VERSION="${version_input:-$DEFAULT_VERSION}"
+    if [[ -t 0 ]]; then
+        read -rp "Ingrese la versión [${DEFAULT_VERSION}]: " version_input
+        VERSION="${version_input:-$DEFAULT_VERSION}"
+    else
+        VERSION="$DEFAULT_VERSION"
+        echo "VERSION no proporcionada, usando valor por defecto: $VERSION"
+    fi
 fi
 
-read -rp "Nombre del mantenedor [${DEFAULT_MAINTAINER_NAME}]: " maintainer_name_input
-MAINTAINER_NAME="${maintainer_name_input:-$DEFAULT_MAINTAINER_NAME}"
-read -rp "Email del mantenedor [${DEFAULT_MAINTAINER_EMAIL}]: " maintainer_email_input
-MAINTAINER_EMAIL="${maintainer_email_input:-$DEFAULT_MAINTAINER_EMAIL}"
+if [[ -z "$MAINTAINER_NAME" ]]; then
+    if [[ -t 0 ]]; then
+        read -rp "Nombre del mantenedor [${DEFAULT_MAINTAINER_NAME}]: " maintainer_name_input
+        MAINTAINER_NAME="${maintainer_name_input:-$DEFAULT_MAINTAINER_NAME}"
+    else
+        MAINTAINER_NAME="$DEFAULT_MAINTAINER_NAME"
+        echo "MAINTAINER_NAME no proporcionado, usando valor por defecto: $MAINTAINER_NAME"
+    fi
+fi
+
+if [[ -z "$MAINTAINER_EMAIL" ]]; then
+    if [[ -t 0 ]]; then
+        read -rp "Email del mantenedor [${DEFAULT_MAINTAINER_EMAIL}]: " maintainer_email_input
+        MAINTAINER_EMAIL="${maintainer_email_input:-$DEFAULT_MAINTAINER_EMAIL}"
+    else
+        MAINTAINER_EMAIL="$DEFAULT_MAINTAINER_EMAIL"
+        echo "MAINTAINER_EMAIL no proporcionado, usando valor por defecto: $MAINTAINER_EMAIL"
+    fi
+fi
 
 STAGE_DIR="$ROOT/dist/${PKG_NAME}_${VERSION}"
 PREFIX="$STAGE_DIR/usr/lib/${PKG_NAME}"

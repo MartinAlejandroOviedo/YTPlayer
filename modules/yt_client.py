@@ -93,20 +93,3 @@ class YouTubeMusicClient:
         except Exception:
             return None
         return None
-
-    def get_song_lyrics(self, video_id: str) -> str | None:
-        """Devuelve letra de una cancion a partir del video_id usando ytmusicapi."""
-        if not video_id:
-            return None
-        try:
-            watch = self._yt.get_watch_playlist(video_id)
-            lyrics_data = watch.get("lyrics") if isinstance(watch, dict) else None
-            browse_id = lyrics_data.get("browseId") if isinstance(lyrics_data, dict) else None
-            if not browse_id:
-                return None
-            lyrics_payload = self._yt.get_lyrics(browse_id)
-            if isinstance(lyrics_payload, dict):
-                return lyrics_payload.get("lyrics")
-        except Exception:
-            return None
-        return None
