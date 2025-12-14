@@ -8,7 +8,7 @@ Reproductor TUI de YouTube Music hecho con Textual y mpv. Busca canciones, muest
 ## Caracteristicas
 - Busqueda rapida de canciones via ytmusicapi (tabla con titulo, artista, album, duracion).
 - Reproduccion en terminal con mpv (play/pause, seek, volumen, continuar siguiente).
-- Pestaña de letras con fetch automatico (YouTube Music + fallback publico) y boton "Usar cookies" para mejorar resultados.
+- Pestaña de letras en tabla (tiempo + texto), resalta linea activa al ritmo de la cancion; fetch automatico (YouTube Music, LRCLib con duracion, Lyrist, lyrics.ovh) y boton "Usar cookies" para mejorar resultados.
 - Visualizador tipo sparkline (captura audio real con sounddevice; fallback sintentico si no hay).
 - Descarga y muestra cover; fallback a ascii-art si no puede renderizar imagen.
 - Selector de dispositivo de audio, barra de progreso, checkbox de auto-continue y normalizador de volumen (dynaudnorm en mpv) para igualar niveles entre temas.
@@ -55,9 +55,9 @@ python app.py
 ## Empaquetado .deb
 El script ya deja el paquete listo en `releases/`.
 ```bash
-bash packaging/build_deb.sh 0.1.0   # ajusta la version
-ls releases/ytplayer_0.1.0.deb
-sudo apt install ./releases/ytplayer_0.1.0.deb
+bash packaging/build_deb.sh 0.1.4   # ajusta la version
+ls releases/ytplayer_0.1.4.deb
+sudo apt install ./releases/ytplayer_0.1.4.deb
 ```
 El paquete instala la app en `/usr/lib/ytplayer` con su venv y expone `ytplayer` en `/usr/bin/ytplayer`. Dependencias declaradas: `mpv, libmpv1 | libmpv2, python3, python3-venv`.
 
