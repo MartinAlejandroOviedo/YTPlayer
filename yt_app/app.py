@@ -1,9 +1,11 @@
 import asyncio
 import os
+import re
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from textual import on
+from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import (
@@ -20,7 +22,6 @@ from textual.widgets import (
     Static,
     TabPane,
     TabbedContent,
-    Log,
 )
 from textual_image.widget import AutoImage as TImage
 
@@ -33,6 +34,28 @@ from yt_app.cover import CoverMixin
 from yt_app.playback import PlaybackMixin
 from yt_app.search import SearchMixin
 from yt_app.theme import ThemeMixin
+
+
+class LyricsTable(DataTable):
+    """Tabla de solo lectura para letras."""
+
+    def __init__(self, *args, **kwargs) -> None:  # type: ignore[override]
+        super().__init__(*args, **kwargs)
+        self.show_cursor = False
+        self.cursor_type = "none"
+        try:
+            self.can_focus = False  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+    def on_focus(self, event: events.Focus) -> None:  # pragma: no cover
+        event.prevent_default()
+
+    def on_key(self, event: events.Key) -> None:  # pragma: no cover
+        event.prevent_default()
+
+    def on_mouse_down(self, event: events.MouseDown) -> None:  # pragma: no cover
+        event.prevent_default()
 
 
 class YouTubeMusicSearch(
@@ -90,6 +113,9 @@ class YouTubeMusicSearch(
         self._lyrics_task: Optional[asyncio.Task] = None
         self._lyrics_video_id: Optional[str] = None
         self._normalize_volume: bool = True
+        self._lyrics_lines: List[str] = []
+        self._synced_lyrics: List[dict[str, Any]] = []
+        self._current_lyric_index: int = -1
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -139,10 +165,7 @@ class YouTubeMusicSearch(
                         with Container(id="lyrics-content"):
                             yield LoadingIndicator(id="lyrics-loading")
                             yield Static("Sin letra disponible.", id="lyrics-status")
-                            yield Log(
-                                id="lyrics-text",
-                                highlight=False,
-                            )
+                            yield LyricsTable(id="lyrics-table", zebra_stripes=True, cursor_type="none")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -173,6 +196,7 @@ class YouTubeMusicSearch(
         except Exception as exc:  # noqa: BLE001
             self._set_status(f"Visualizador en fallback: {exc}")
         self._load_audio_devices()
+        self._init_lyrics_table()
 
     def _load_audio_devices(self) -> None:
         select = self.query_one("#audio-select", Select)
@@ -199,6 +223,26 @@ class YouTubeMusicSearch(
     def _find_cookies_file(self) -> Optional[Path]:
         return YouTubeMusicClient._discover_cookies()
 
+    def _init_lyrics_table(self) -> None:
+        table = self._get_lyrics_table()
+        if not table:
+            return
+        if table.columns:
+            return
+        try:
+            table.add_columns("Tiempo", "Texto")
+            try:
+                table.can_focus = False  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            for attr, value in (("show_cursor", False), ("cursor_type", "none")):
+                try:
+                    setattr(table, attr, value)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
     def _use_cookies(self) -> None:
         path = self._find_cookies_file()
         if not path:
@@ -224,9 +268,9 @@ class YouTubeMusicSearch(
         except Exception:
             return None
 
-    def _get_lyrics_log(self) -> Optional[Log]:
+    def _get_lyrics_table(self) -> Optional[DataTable]:
         try:
-            return self.query_one("#lyrics-text", Log)
+            return self.query_one("#lyrics-table", DataTable)
         except Exception:
             return None
 
@@ -248,12 +292,15 @@ class YouTubeMusicSearch(
             status_widget.update(message)
 
     def _show_lyrics_message(self, message: str) -> None:
-        log = self._get_lyrics_log()
-        if not log:
+        table = self._get_lyrics_table()
+        if not table:
+            self.call_after_refresh(lambda: self._show_lyrics_message(message))
             return
         try:
-            log.clear()
-            log.write(message)
+            table.clear()
+            if not table.columns:
+                table.add_columns("Tiempo", "Texto")
+            table.add_row("", message)
         except Exception:
             pass
 
@@ -262,6 +309,9 @@ class YouTubeMusicSearch(
             self._lyrics_task.cancel()
             self._lyrics_task = None
         self._lyrics_video_id = None
+        self._lyrics_lines = []
+        self._synced_lyrics = []
+        self._current_lyric_index = -1
         self._set_lyrics_loading(False)
         self._set_lyrics_status(message)
         self._show_lyrics_message(message)
@@ -285,7 +335,12 @@ class YouTubeMusicSearch(
         task = asyncio.current_task()
         try:
             lyrics = await asyncio.to_thread(
-                self.ytmusic.get_song_lyrics, item.video_id, item.title, item.artist
+                self.ytmusic.get_song_lyrics,
+                item.video_id,
+                item.title,
+                item.artist,
+                item.album,
+                item.duration,
             )
             if self._lyrics_video_id != item.video_id:
                 return
@@ -309,15 +364,110 @@ class YouTubeMusicSearch(
             self._set_lyrics_loading(False)
 
     def _set_lyrics_text(self, lyrics: str) -> None:
-        log = self._get_lyrics_log()
-        if not log:
-            return
         try:
-            log.clear()
-            for line in lyrics.splitlines():
-                log.write(line)
+            plain_lines, synced = self._parse_lyrics(lyrics)
+            self._lyrics_lines = plain_lines
+            self._synced_lyrics = synced
+            self._current_lyric_index = -1
+            self._set_status(f"Letras cargadas ({len(self._lyrics_lines)} lineas)")
+            self._render_lyrics_lines()
         except Exception:
             self._show_lyrics_message("No se pudo mostrar la letra.")
+
+    def _render_lyrics_lines(self, active_index: Optional[int] = None) -> None:
+        table = self._get_lyrics_table()
+        if not table:
+            self.call_after_refresh(lambda: self._render_lyrics_lines(active_index))
+            return
+        try:
+            if not table.columns:
+                table.add_columns("Tiempo", "Texto")
+            table.clear()
+            if not self._lyrics_lines:
+                table.add_row("", "Sin letra disponible.")
+                return
+            for idx, line in enumerate(self._lyrics_lines):
+                prefix = "▶ " if active_index is not None and idx == active_index else "  "
+                time_str = ""
+                if idx < len(self._synced_lyrics):
+                    time_str = self._synced_lyrics[idx].get("time", "")
+                text = f"{prefix}{line}"
+                table.add_row(time_str, text, key=f"lyric-{idx}")
+            if active_index is not None and 0 <= active_index < len(self._lyrics_lines):
+                try:
+                    table.scroll_to_row(active_index)
+                except Exception:
+                    pass
+        except Exception:
+            self._show_lyrics_message("No se pudo mostrar la letra.")
+
+    @staticmethod
+    def _parse_lyrics(lyrics: str) -> tuple[list[str], list[dict[str, Any]]]:
+        """Devuelve (lineas sin timestamp, lista sincronizada con ts y texto)."""
+        timestamp_re = re.compile(r"\[([0-9]{1,2}):([0-9]{2})(?:\.([0-9]{1,3}))?\]")
+        synced: list[dict[str, Any]] = []
+        plain_lines: list[str] = []
+
+        for raw_line in lyrics.splitlines():
+            matches = list(timestamp_re.finditer(raw_line))
+            text_start = matches[-1].end() if matches else 0
+            text = raw_line[text_start:].strip()
+            if matches:
+                for match in matches:
+                    minutes = int(match.group(1))
+                    seconds = int(match.group(2))
+                    millis = int((match.group(3) or "0").ljust(3, "0"))
+                    ts = minutes * 60 + seconds + millis / 1000.0
+                    synced.append({"ts": ts, "text": text})
+            if text:
+                plain_lines.append(text)
+
+        if synced:
+            synced.sort(key=lambda t: t["ts"])
+            # Enriquecer con tiempo formateado.
+            for item in synced:
+                item["time"] = YouTubeMusicSearch._fmt_ts(item["ts"])
+            if not plain_lines:
+                plain_lines = [item["text"] for item in synced]
+        else:
+            # Algunos providers devuelven todo en una sola linea con dobles espacios o con '\n' literal.
+            normalized = lyrics.replace("\\n", "\n")
+            normalized = re.sub(r"[ \t]{2,}", "\n", normalized)
+            plain_lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+
+        return (plain_lines, synced)
+
+    def _update_synced_highlight(self, position: float) -> None:
+        if not self._synced_lyrics or position is None:
+            return
+        idx = self._find_lyric_index(position)
+        if idx != self._current_lyric_index:
+            self._current_lyric_index = idx
+            self._render_lyrics_lines(active_index=idx)
+
+    def _find_lyric_index(self, position: float) -> int:
+        idx = -1
+        for i, item in enumerate(self._synced_lyrics):
+            ts = item.get("ts", 0.0)
+            if position >= ts:
+                idx = i
+            else:
+                break
+        return idx
+
+    @staticmethod
+    def _fmt_ts(seconds: float) -> str:
+        try:
+            secs = int(seconds)
+            m, s = divmod(secs, 60)
+            return f"{m:02d}:{s:02d}"
+        except Exception:
+            return ""
+
+    @on(events.MouseDown, "#lyrics-table")
+    def _block_lyrics_click(self, event: events.MouseDown) -> None:
+        """Evita que clicks en la tabla de letras rompan el foco/estado."""
+        event.stop()
 
     def on_unmount(self) -> None:
         try:

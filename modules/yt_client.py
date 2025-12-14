@@ -76,7 +76,14 @@ class YouTubeMusicClient:
             parsed.append(SearchResult(title, artist, album, duration, video_id, thumb_url))
         return parsed
 
-    def get_song_lyrics(self, video_id: str, title: Optional[str] = None, artist: Optional[str] = None) -> str | None:
+    def get_song_lyrics(
+        self,
+        video_id: str,
+        title: Optional[str] = None,
+        artist: Optional[str] = None,
+        album: Optional[str] = None,
+        duration: Optional[str] = None,
+    ) -> str | None:
         """Devuelve letra desde YouTube Music, con fallback a API publica si es necesario."""
         self.last_lyrics_source = ""
         # Primero intentar con YouTube Music.
@@ -86,7 +93,7 @@ class YouTubeMusicClient:
             return lyrics
         # Fallback publico si tenemos artista y titulo.
         if title and artist:
-            fallback = self._get_public_lyrics(title, artist)
+            fallback = self._get_public_lyrics(title, artist, album, duration)
             if fallback:
                 return fallback
         return None
@@ -107,16 +114,74 @@ class YouTubeMusicClient:
             return None
         return None
 
-    def _get_public_lyrics(self, title: str, artist: str) -> str | None:
+    def _get_public_lyrics(
+        self, title: str, artist: str, album: Optional[str] = None, duration: Optional[str] = None
+    ) -> str | None:
         """Consulta APIs publicas para obtener letras sin cookies."""
-        fetchers: list[Callable[[str, str], Optional[str]]] = [
+        fetchers: list[Callable[..., Optional[str]]] = [
+            self._get_lrclib,
             self._get_lyrist_lyrics,
             self._get_lyrics_ovh,
         ]
         for fetch in fetchers:
-            lyrics = fetch(title, artist)
+            if fetch is self._get_lrclib:
+                lyrics = fetch(title, artist, album, duration)
+            else:
+                lyrics = fetch(title, artist)
             if lyrics:
                 return lyrics
+        return None
+
+    def _get_lrclib(
+        self, title: str, artist: str, album: Optional[str] = None, duration: Optional[str] = None
+    ) -> Optional[str]:
+        """Consulta lrclib.net (sin API key, retorna plain/synced lyrics)."""
+        try:
+            params = [
+                ("track_name", title),
+                ("artist_name", artist),
+                ("album_name", album or ""),
+            ]
+            duration_secs = self._duration_to_seconds(duration)
+            if duration_secs is not None:
+                params.append(("duration", str(duration_secs)))
+            query = "&".join(f"{k}={quote_plus(v)}" for k, v in params if v)
+            base = "https://lrclib.net/api/get" if duration_secs is not None else "https://lrclib.net/api/search"
+            url = f"{base}?{query}"
+            headers = {"User-Agent": "ytplayer/0.1 (https://github.com)"}
+            with urlopen(url, timeout=8) as resp:
+                if resp.status != 200:
+                    return None
+                data = json.loads(resp.read().decode("utf-8", "ignore"))
+            record = None
+            if isinstance(data, list) and data:
+                record = data[0]
+            elif isinstance(data, dict) and data.get("syncedLyrics") or data.get("plainLyrics"):
+                record = data
+            if record:
+                text = record.get("syncedLyrics") or record.get("plainLyrics")
+                if text:
+                    self.last_lyrics_source = "LRCLib"
+                    return text
+        except Exception:
+            return None
+        return None
+
+    @staticmethod
+    def _duration_to_seconds(duration: Optional[str]) -> Optional[int]:
+        """Convierte 'MM:SS' o 'H:MM:SS' a segundos."""
+        if not duration:
+            return None
+        try:
+            parts = [int(p) for p in duration.split(":")]
+            if len(parts) == 2:
+                m, s = parts
+                return m * 60 + s
+            if len(parts) == 3:
+                h, m, s = parts
+                return h * 3600 + m * 60 + s
+        except Exception:
+            return None
         return None
 
     def _get_lyrist_lyrics(self, title: str, artist: str) -> Optional[str]:

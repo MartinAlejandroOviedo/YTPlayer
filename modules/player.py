@@ -152,13 +152,23 @@ class MPVController:
         """Activa/desactiva normalizacion de volumen via filtro dynaudnorm."""
         if not self._player:
             raise RuntimeError(self._error or "mpv no inicializado")
-        try:
-            if enabled:
-                self._player.command("set_property", "af", "lavfi=[dynaudnorm]")
-            else:
+        # Algunos builds aceptan "dynaudnorm" directo y otros requieren "lavfi=[dynaudnorm]".
+        if not enabled:
+            try:
                 self._player.command("set_property", "af", "")
-        except Exception as exc:  # noqa: BLE001
-            raise RuntimeError(f"af error: {exc}") from exc
+                return
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError(f"af error: {exc}") from exc
+
+        errors: list[str] = []
+        for candidate in ("dynaudnorm", "lavfi=[dynaudnorm]"):
+            try:
+                self._player.command("set_property", "af", candidate)
+                return
+            except Exception as exc:  # noqa: BLE001
+                errors.append(str(exc))
+
+        raise RuntimeError(f"af error: {'; '.join(errors)}")
 
     def _on_log(self, level: str, prefix: str, text: str) -> None:
         if level.lower() in {"error", "warning"}:

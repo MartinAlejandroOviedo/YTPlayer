@@ -15,6 +15,8 @@ class PlaybackMixin:
     _seek_step: int
     _is_playing: bool
     _auto_continue: bool
+    _synced_lyrics: list[tuple[float, str]]
+    _current_lyric_index: int
 
     def _update_volume_display(self) -> None:
         self.query_one("#volume-display", Static).update(f"Volumen: {self._volume}%")
@@ -105,6 +107,7 @@ class PlaybackMixin:
             return
         self._current = item
         self._current_index = index
+        self._select_table_row(index)
         self._is_playing = True
         if self._visualizer_timer:
             self._visualizer_timer.resume()
@@ -225,6 +228,18 @@ class PlaybackMixin:
                 return
         self._stop_playback()
 
+    def _select_table_row(self, index: Optional[int]) -> None:
+        """Marca en la tabla la fila que se esta reproduciendo."""
+        if index is None:
+            return
+        try:
+            table = self.query_one(DataTable)
+            if 0 <= index < table.row_count:
+                table.focus()
+                table.move_cursor(row=index, column=0, scroll=True)
+        except Exception:
+            return
+
     def _tick_progress(self) -> None:
         bar = self.query_one("#progress-bar", ProgressBar)
         label = self.query_one("#progress-label", Static)
@@ -247,6 +262,11 @@ class PlaybackMixin:
             label.update(f"{self._fmt_time(pos)} / {self._fmt_time(dur)}")
         else:
             label.update("00:00 / --:--")
+        if pos is not None:
+            try:
+                self._update_synced_highlight(pos)
+            except Exception:
+                pass
 
     def _reset_progress(self) -> None:
         try:

@@ -42,6 +42,23 @@ Screen {
     border: solid #22d3ee;
     content-align: left top;
 }
+#lyrics-table {
+    width: 100%;
+    height: 1fr;
+    background: #0b1220;
+    border: solid #22d3ee;
+    color: #e5e7eb;
+}
+#lyrics-table .datatable--header {
+    background: #111827;
+    color: #22d3ee;
+}
+#lyrics-table .datatable--cell {
+    color: #e5e7eb;
+}
+#lyrics-table .datatable--row {
+    color: #e5e7eb;
+}
 #lyrics-loading {
     margin: 0 0 1 0;
     color: #22d3ee;
