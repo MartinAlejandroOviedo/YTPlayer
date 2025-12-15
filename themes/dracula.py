@@ -34,6 +34,28 @@ Screen {
 #player-tab {
     height: 1fr;
 }
+#options-tab {
+    height: 1fr;
+}
+#options-content {
+    width: 100%;
+    height: 1fr;
+    padding: 1;
+    background: #1e1f29;
+    border: solid #bd93f9;
+    content-align: left top;
+}
+#options-title {
+    color: #bd93f9;
+    padding: 0 0 1 0;
+}
+#options-content Select {
+    margin: 0 0 1 0;
+    width: 28;
+}
+#options-content Checkbox {
+    margin: 0 0 1 0;
+}
 #lyrics-content {
     width: 100%;
     height: 1fr;
@@ -105,7 +127,7 @@ Screen {
     width: 32;
 }
 #quit-btn {
-    width: 10;
+    width: 8;
     border: solid #ffb86c;
     color: #f8f8f2;
     background: #5a3d11;
@@ -163,7 +185,7 @@ Screen {
 }
 #controls Button {
     margin: 0 1 0 0;
-    width: 6;
+    width: 4;
 }
 #volume-display {
     padding: 0 0 1 0;
@@ -176,10 +198,10 @@ Screen {
 }
 /* Botonera principal */
 #transport Button {
-    width: 8;
+    width: 5;
     height: 3;
     border: solid #ff79c6;
-    margin: 0 2;
+    margin: 0 1;
     content-align: center middle;
     background: #1e1f29;
     color: #f8f8f2;

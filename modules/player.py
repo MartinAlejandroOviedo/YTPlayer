@@ -14,6 +14,8 @@ class MPVController:
         self._error: Optional[str] = None
         self._last_log: Optional[str] = None
         self._end_callback: Optional[Callable[[], None]] = None
+        self._normalize_enabled: bool = False
+        self._eq_preset: str = "plano"
         if mpv is None:
             self._error = "libmpv no esta disponible. Instala mpv/libmpv."
             return
@@ -149,26 +151,78 @@ class MPVController:
         return level
 
     def set_normalizer(self, enabled: bool) -> None:
-        """Activa/desactiva normalizacion de volumen via filtro dynaudnorm."""
+        """Activa/desactiva normalizacion via dynaudnorm y reaplica filtros activos."""
+        self._normalize_enabled = bool(enabled)
+        self.set_filters(self._normalize_enabled, self._eq_preset)
+
+    def set_equalizer_preset(self, preset: str) -> None:
+        """Configura ecualizador a partir de un nombre de preset y reaplica filtros."""
+        self._eq_preset = preset
+        self.set_filters(self._normalize_enabled, self._eq_preset)
+
+    def set_filters(self, normalize: bool, eq_preset: Optional[str]) -> None:
+        """Aplica cadena de filtros (normalizador + ecualizador)."""
         if not self._player:
             raise RuntimeError(self._error or "mpv no inicializado")
-        # Algunos builds aceptan "dynaudnorm" directo y otros requieren "lavfi=[dynaudnorm]".
-        if not enabled:
-            try:
-                self._player.command("set_property", "af", "")
-                return
-            except Exception as exc:  # noqa: BLE001
-                raise RuntimeError(f"af error: {exc}") from exc
 
+        # Construir filtro de ecualizador segun preset
+        eq_filter = self._build_eq_filter(eq_preset)
+        self._normalize_enabled = bool(normalize)
+        self._eq_preset = eq_preset or "plano"
+
+        normalizer_candidates = ["dynaudnorm", "lavfi=[dynaudnorm]"] if normalize else [None]
         errors: list[str] = []
-        for candidate in ("dynaudnorm", "lavfi=[dynaudnorm]"):
+
+        for norm in normalizer_candidates:
+            filters: list[str] = []
+            if norm:
+                filters.append(norm)
+            if eq_filter:
+                filters.append(eq_filter)
+            # Si no hay filtros activos, limpiar af y salir.
+            if not filters:
+                try:
+                    self._player.command("set_property", "af", "")
+                    return
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(str(exc))
+                    continue
             try:
-                self._player.command("set_property", "af", candidate)
+                self._player.command("set_property", "af", ",".join(filters))
                 return
             except Exception as exc:  # noqa: BLE001
                 errors.append(str(exc))
+                continue
 
         raise RuntimeError(f"af error: {'; '.join(errors)}")
+
+    def _build_eq_filter(self, preset: Optional[str]) -> str:
+        """Devuelve cadena de filtro equalizer para mpv o vacio si es plano."""
+        if not preset:
+            return ""
+        name = preset.lower()
+        bands_hz = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+        presets: dict[str, list[int]] = {
+            "plano": [0] * 10,
+            "flat": [0] * 10,
+            "rock": [5, 4, 2, 0, -2, -2, 0, 2, 4, 5],
+            "pop": [-1, 2, 4, 5, 3, 0, 1, 2, 3, 3],
+            "jazz": [0, 0, 3, 5, 3, 2, 3, 3, 2, 1],
+            "house": [5, 4, 2, 0, -1, 0, 2, 4, 5, 5],
+            "techno": [6, 5, 3, 0, -2, 0, 3, 5, 6, 6],
+        }
+        gains = presets.get(name)
+        if gains is None:
+            raise ValueError(f"Preset EQ desconocido: {preset}")
+        # Si todas las ganancias son 0, no aplicar filtro.
+        if all(g == 0 for g in gains):
+            return ""
+        parts = [
+            f"equalizer=f={freq}:width_type=q:width=1:g={gain}"
+            for freq, gain in zip(bands_hz, gains, strict=False)
+            if gain != 0
+        ]
+        return ",".join(parts)
 
     def _on_log(self, level: str, prefix: str, text: str) -> None:
         if level.lower() in {"error", "warning"}:

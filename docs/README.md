@@ -26,10 +26,10 @@ python app.py
 - `python app.py` lanza la UI.
 - Escribe una consulta y Enter o click en Buscar.
 - Selecciona una fila y presiona Enter o el boton Play.
-- Cambia tema con Ctrl+1..4, volumen con `-` / `=`, seek con flechas izquierda/derecha.
+- Cambia tema con Ctrl+1..5, volumen con `-` / `=`, seek con flechas izquierda/derecha.
 - Checkbox "Continuar" avanza automaticamente a la siguiente fila al terminar una pista.
 - Checkbox "Normalizar" aplica dynaudnorm para igualar volumen entre temas.
-- Boton "Usar cookies" carga cookies de YouTube Music si las ubicas en `~/.config/ytplayer/cookies.json`, en el repo como `cookies.json`, o via `YTMUSIC_COOKIES`/`YTMUSIC_COOKIE_FILE`.
+- Selector de ecualizador en pestaña Opciones con presets (plano, rock, pop, jazz, house, techno).
 - Selector superior permite elegir dispositivo de audio de mpv.
 
 ## Atajos clave
@@ -38,22 +38,22 @@ python app.py
 - `Space` play/pause.
 - `-` / `=` volumen.
 - `Left` / `Right` seek +/- 5s.
-- `Ctrl+1..4` cambia tema.
+- `Ctrl+1..5` cambia tema.
 - `Ctrl+C` sale.
 
 ## Controles en pantalla
 - Panel izquierdo: selector de dispositivo y boton Salir, cuadro de busqueda + boton Buscar, barra de transporte (<<, Play/Pause, Stop, >>) y tabla de resultados.
-- Panel derecho: pestaña Player con caratula + estado de carga, info de pista actual, progreso y barra, estado de volumen, checkboxes Continuar/Normalizar, botonera de volumen, visualizador sparkline. Pestaña Letras con estado, loader y texto de letra.
+- Panel derecho: pestaña Player con caratula + estado de carga, info de pista actual, progreso y barra, estado de volumen, botonera de volumen y visualizador sparkline. Pestaña Opciones con selector de ecualizador y checkboxes Continuar/Normalizar. Pestaña Letras con estado, loader y texto de letra.
 
 ## Temas disponibles
-dark (default), dracula, caramel, light. Se aplican al vuelo sin reiniciar.
+mini (default, compacto), dark, dracula, caramel, light. Se aplican al vuelo sin reiniciar. Atajos: Ctrl+1..5.
 
 ## Empaquetado .deb
 El script deja el paquete en `releases/`.
 ```bash
-bash packaging/build_deb.sh    # solicita version y datos de mantenedor (por defecto 0.1.0)
-ls releases/ytplayer_<version>.deb
-sudo apt install ./releases/ytplayer_<version>.deb
+bash packaging/build_deb.sh 0.1.5    # solicita version y datos de mantenedor (por defecto 0.1.0)
+ls releases/ytplayer_0.1.5.deb
+sudo apt install ./releases/ytplayer_0.1.5.deb
 ```
 Instala la app en `/usr/lib/ytplayer` con su venv y expone `ytplayer` en `/usr/bin/ytplayer`. Dependencias declaradas: `mpv, libmpv1 | libmpv2, python3, python3-venv`.
 

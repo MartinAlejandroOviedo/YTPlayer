@@ -67,7 +67,7 @@ class YouTubeMusicSearch(
 ):
     """App Textual para buscar y reproducir musica de YouTube Music."""
 
-    CSS = get_theme_css("dark")
+    CSS = get_theme_css("mini")
 
     BINDINGS = [
         ("ctrl+c", "quit", "Salir"),
@@ -84,6 +84,7 @@ class YouTubeMusicSearch(
         ("ctrl+2", "set_theme('dracula')", "Tema dracula"),
         ("ctrl+3", "set_theme('caramel')", "Tema caramel"),
         ("ctrl+4", "set_theme('light')", "Tema light"),
+        ("ctrl+5", "set_theme('mini')", "Tema mini"),
     ]
 
     def __init__(self) -> None:
@@ -108,11 +109,12 @@ class YouTubeMusicSearch(
         self._selected_device: Optional[str] = None
         self._spark_data: List[float] = []
         self._cover_task: Optional[asyncio.Task] = None
-        self._theme_name: str = "dark"
+        self._theme_name: str = "mini"
         self._auto_continue: bool = False
         self._lyrics_task: Optional[asyncio.Task] = None
         self._lyrics_video_id: Optional[str] = None
         self._normalize_volume: bool = True
+        self._eq_preset: str = "plano"
         self._lyrics_lines: List[str] = []
         self._synced_lyrics: List[dict[str, Any]] = []
         self._current_lyric_index: int = -1
@@ -125,7 +127,6 @@ class YouTubeMusicSearch(
                     with Horizontal(id="top-menu"):
                         yield Select(options=[], id="audio-select", prompt="Dispositivo audio")
                         yield Button("Salir", id="quit-btn", variant="default")
-                        yield Button("Usar cookies", id="use-cookies", variant="default")
                     with Container(id="search-area"):
                         yield Static("Busca en YouTube Music", id="title")
                         with Horizontal():
@@ -145,7 +146,6 @@ class YouTubeMusicSearch(
                 with TabbedContent(id="right-tabs"):
                     with TabPane("Player", id="player-tab"):
                         with Container(id="caja-player"):
-                            yield Static("Player", id="player-title")
                             with Vertical(id="cover-block"):
                                 yield TImage(id="cover")
                                 yield LoadingIndicator(id="cover-loading")
@@ -155,12 +155,28 @@ class YouTubeMusicSearch(
                                 yield Static("00:00 / --:--", id="progress-label")
                                 yield ProgressBar(total=100, show_percentage=False, id="progress-bar")
                             yield Static("Volumen: --", id="volume-display")
-                            yield Checkbox("Continuar", id="auto-continue", value=False)
-                            yield Checkbox("Normalizar", id="normalize", value=True)
                             with Horizontal(id="controls"):
                                 yield Button("Vol -", id="vol-down", variant="default")
                                 yield Button("Vol +", id="vol-up", variant="default")
                             yield Sparkline(id="visualizer")
+                    with TabPane("Opciones", id="options-tab"):
+                        with Container(id="options-content"):
+                            yield Static("Ajustes de reproduccion", id="options-title")
+                            yield Select(
+                                options=[
+                                    ("Plano", "plano"),
+                                    ("Rock", "rock"),
+                                    ("Pop", "pop"),
+                                    ("Jazz", "jazz"),
+                                    ("House", "house"),
+                                    ("Techno", "techno"),
+                                ],
+                                id="eq-select",
+                                prompt="Ecualizador",
+                                value="plano",
+                            )
+                            yield Checkbox("Continuar", id="auto-continue", value=False)
+                            yield Checkbox("Normalizar", id="normalize", value=True)
                     with TabPane("Letras", id="lyrics-tab"):
                         with Container(id="lyrics-content"):
                             yield LoadingIndicator(id="lyrics-loading")
@@ -188,9 +204,14 @@ class YouTubeMusicSearch(
             pass
         try:
             self.query_one("#normalize", Checkbox).value = self._normalize_volume
-            self.player.set_normalizer(self._normalize_volume)
         except Exception:
             pass
+        try:
+            eq_select = self.query_one("#eq-select", Select)
+            eq_select.value = self._eq_preset
+        except Exception:
+            pass
+        self._apply_filters()
         try:
             self.visualizer.start()
         except Exception as exc:  # noqa: BLE001
@@ -220,6 +241,15 @@ class YouTubeMusicSearch(
     def _set_status(self, message: str) -> None:
         self.query_one("#status", Static).update(message)
 
+    def _apply_filters(self) -> None:
+        """Aplica normalizador + preset de EQ activos."""
+        if not self.player.available:
+            return
+        try:
+            self.player.set_filters(self._normalize_volume, self._eq_preset)
+        except Exception as exc:  # noqa: BLE001
+            self._set_status(f"Error al ajustar filtros: {exc}")
+
     def _find_cookies_file(self) -> Optional[Path]:
         return YouTubeMusicClient._discover_cookies()
 
@@ -242,19 +272,6 @@ class YouTubeMusicSearch(
                     continue
         except Exception:
             pass
-
-    def _use_cookies(self) -> None:
-        path = self._find_cookies_file()
-        if not path:
-            self._set_status("No encontre cookies. Coloca cookies.json en ~/.config/ytplayer o en el repo y reintenta.")
-            return
-        try:
-            self.ytmusic = YouTubeMusicClient(str(path))
-            self._cookies_path = str(path)
-            self._set_status(f"Cookies cargadas: {path}")
-            self._reset_lyrics()
-        except Exception as exc:  # noqa: BLE001
-            self._set_status(f"No se pudieron cargar las cookies: {exc}")
 
     def _get_lyrics_status_widget(self) -> Optional[Static]:
         try:
@@ -496,10 +513,6 @@ class YouTubeMusicSearch(
     def _on_quit(self, _: Button.Pressed) -> None:
         self.exit()
 
-    @on(Button.Pressed, "#use-cookies")
-    def _on_use_cookies(self, _: Button.Pressed) -> None:
-        self._use_cookies()
-
     @on(Input.Submitted)
     async def _on_input_submitted(self, _: Input.Submitted) -> None:
         await self.action_search()
@@ -524,12 +537,18 @@ class YouTubeMusicSearch(
     @on(Checkbox.Changed, "#normalize")
     def _on_normalize_changed(self, event: Checkbox.Changed) -> None:
         self._normalize_volume = bool(event.value)
-        try:
-            self.player.set_normalizer(self._normalize_volume)
-            msg = "Normalizacion activada" if self._normalize_volume else "Normalizacion desactivada"
-            self._set_status(msg)
-        except Exception as exc:  # noqa: BLE001
-            self._set_status(f"Error al ajustar normalizacion: {exc}")
+        self._apply_filters()
+        msg = "Normalizacion activada" if self._normalize_volume else "Normalizacion desactivada"
+        self._set_status(msg)
+
+    @on(Select.Changed, "#eq-select")
+    def _on_eq_changed(self, event: Select.Changed) -> None:
+        value = event.value
+        if not isinstance(value, str):
+            return
+        self._eq_preset = value
+        self._apply_filters()
+        self._set_status(f"Ecualizador: {value}")
 
     @on(Button.Pressed, "#seek-forward")
     def _on_seek_forward_btn(self, _: Button.Pressed) -> None:

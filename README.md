@@ -8,11 +8,12 @@ Reproductor TUI de YouTube Music hecho con Textual y mpv. Busca canciones, muest
 ## Caracteristicas
 - Busqueda rapida de canciones via ytmusicapi (tabla con titulo, artista, album, duracion).
 - Reproduccion en terminal con mpv (play/pause, seek, volumen, continuar siguiente).
-- Pestaña de letras en tabla (tiempo + texto), resalta linea activa al ritmo de la cancion; fetch automatico (YouTube Music, LRCLib con duracion, Lyrist, lyrics.ovh) y boton "Usar cookies" para mejorar resultados.
+- Pestaña de letras en tabla (tiempo + texto), resalta linea activa al ritmo de la cancion; fetch automatico (YouTube Music, LRCLib con duracion, Lyrist, lyrics.ovh).
 - Visualizador tipo sparkline (captura audio real con sounddevice; fallback sintentico si no hay).
 - Descarga y muestra cover; fallback a ascii-art si no puede renderizar imagen.
 - Selector de dispositivo de audio, barra de progreso, checkbox de auto-continue y normalizador de volumen (dynaudnorm en mpv) para igualar niveles entre temas.
-- Temas dinamicos: dark, dracula, caramel, light (Ctrl+1..4).
+- Ecualizador con presets (plano, rock, pop, jazz, house, techno) en la pestaña Opciones.
+- Temas dinamicos: dark, dracula, caramel, light y mini (compacto) con atajos Ctrl+1..5.
 
 ## Requisitos del sistema
 - Python 3.10+.
@@ -34,10 +35,10 @@ python app.py
 - `python app.py` lanza la UI.
 - Escribe una consulta y Enter o click en Buscar.
 - Selecciona una fila y presiona Enter o el boton Play.
-- Cambia tema con Ctrl+1..4, volumen con `-` / `=`, seek con flechas izquierda/derecha.
+- Cambia tema con Ctrl+1..5, volumen con `-` / `=`, seek con flechas izquierda/derecha.
 - Checkbox "Continuar" avanza automaticamente a la siguiente fila al terminar una pista.
 - Checkbox "Normalizar" aplica dynaudnorm para igualar volumen entre temas.
-- Boton "Usar cookies" permite cargar cookies de YouTube Music para mejorar letras/resultados (coloca cookies.json en `~/.config/ytplayer/` o usa las env vars `YTMUSIC_COOKIES`/`YTMUSIC_COOKIE_FILE`).
+- Pestaña Opciones incluye selector de ecualizador con presets y checkboxes Continuar/Normalizar.
 - Selector superior permite elegir dispositivo de audio de mpv.
 
 ### Atajos clave
@@ -46,18 +47,18 @@ python app.py
 - `Space` play/pause.
 - `-` / `=` volumen.
 - `Left` / `Right` seek +/- 5s; `<<` / `>>` botones para saltos largos.
-- `Ctrl+1..4` cambia tema.
+- `Ctrl+1..5` cambia tema.
 - `Ctrl+C` sale.
 
 ## Temas disponibles
-- dark (default), dracula, caramel, light. Se aplican al vuelo sin reiniciar.
+- mini (default, compacto), dark, dracula, caramel, light. Se aplican al vuelo sin reiniciar. Atajos: Ctrl+1..5.
 
 ## Empaquetado .deb
 El script ya deja el paquete listo en `releases/`.
 ```bash
-bash packaging/build_deb.sh 0.1.4   # ajusta la version
-ls releases/ytplayer_0.1.4.deb
-sudo apt install ./releases/ytplayer_0.1.4.deb
+bash packaging/build_deb.sh 0.1.5   # ajusta la version
+ls releases/ytplayer_0.1.5.deb
+sudo apt install ./releases/ytplayer_0.1.5.deb
 ```
 El paquete instala la app en `/usr/lib/ytplayer` con su venv y expone `ytplayer` en `/usr/bin/ytplayer`. Dependencias declaradas: `mpv, libmpv1 | libmpv2, python3, python3-venv`.
 

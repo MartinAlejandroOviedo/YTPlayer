@@ -26,10 +26,10 @@ python app.py
 - `python app.py` launches the UI.
 - Type a query and press Enter or click Search.
 - Select a row and press Enter or click Play.
-- Switch theme with Ctrl+1..4, adjust volume with `-` / `=`, seek with left/right arrows.
+- Switch theme with Ctrl+1..5, adjust volume with `-` / `=`, seek with left/right arrows.
 - "Continuar" checkbox auto-advances to the next row when a track ends.
 - "Normalizar" checkbox applies mpv's dynaudnorm to even out volume between tracks.
-- "Usar cookies" button loads YouTube Music cookies if placed at `~/.config/ytplayer/cookies.json`, repo `cookies.json`, or via `YTMUSIC_COOKIES`/`YTMUSIC_COOKIE_FILE`.
+- Options tab has an equalizer selector with presets (flat, rock, pop, jazz, house, techno).
 - Top selector lets you pick the mpv audio device.
 
 ## Key bindings
@@ -38,22 +38,22 @@ python app.py
 - `Space` play/pause.
 - `-` / `=` volume.
 - `Left` / `Right` seek +/- 5s.
-- `Ctrl+1..4` change theme.
+- `Ctrl+1..5` change theme.
 - `Ctrl+C` quit.
 
 ## On-screen controls
 - Left panel: audio device selector and Exit button, search box + Search button, transport bar (<<, Play/Pause, Stop, >>), and results table.
-- Right panel: Player tab with cover art + loading state, now playing info, progress label and bar, volume status, Continuar/Normalizar checkboxes, volume buttons, sparkline visualizer. Lyrics tab with status, loader, and lyrics text.
+- Right panel: Player tab with cover art + loading state, now playing info, progress label and bar, volume status, volume buttons, sparkline visualizer. Options tab with equalizer selector + Continuar/Normalizar checkboxes. Lyrics tab with status, loader, and lyrics text.
 
 ## Themes
-dark (default), dracula, caramel, light. Apply instantly without restarting.
+mini (default, compact), dark, dracula, caramel, light. Apply instantly without restarting. Shortcuts: Ctrl+1..5.
 
 ## .deb packaging
 Script outputs the package into `releases/`.
 ```bash
-bash packaging/build_deb.sh    # prompts for version and maintainer (default 0.1.0)
-ls releases/ytplayer_<version>.deb
-sudo apt install ./releases/ytplayer_<version>.deb
+bash packaging/build_deb.sh 0.1.5    # prompts for version and maintainer (default 0.1.0)
+ls releases/ytplayer_0.1.5.deb
+sudo apt install ./releases/ytplayer_0.1.5.deb
 ```
 Installs the app into `/usr/lib/ytplayer` with its venv and exposes `ytplayer` in `/usr/bin/ytplayer`. Declared deps: `mpv, libmpv1 | libmpv2, python3, python3-venv`.
 
