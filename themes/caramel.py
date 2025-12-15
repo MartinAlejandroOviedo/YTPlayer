@@ -72,6 +72,20 @@ Screen {
     color: #c49a85;
     padding: 0 0 1 0;
 }
+#lyrics-offset-controls {
+    padding: 0 0 1 0;
+    height: 3;
+    content-align: left middle;
+}
+#lyrics-offset-controls Button {
+    width: 14;
+    height: 3;
+    margin: 0 1 0 0;
+}
+#lyrics-offset-label {
+    padding: 0 0 0 1;
+    color: #c49a85;
+}
 #lyrics-text {
     height: 1fr;
     border: solid #3b1a1a;

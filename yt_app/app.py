@@ -117,7 +117,10 @@ class YouTubeMusicSearch(
         self._eq_preset: str = "plano"
         self._lyrics_lines: List[str] = []
         self._synced_lyrics: List[dict[str, Any]] = []
+        self._synced_lyrics_base: List[dict[str, Any]] = []
         self._current_lyric_index: int = -1
+        self._lyrics_target_duration: Optional[float] = None
+        self._lyrics_offset: float = 0.0
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -181,6 +184,10 @@ class YouTubeMusicSearch(
                         with Container(id="lyrics-content"):
                             yield LoadingIndicator(id="lyrics-loading")
                             yield Static("Sin letra disponible.", id="lyrics-status")
+                            with Horizontal(id="lyrics-offset-controls"):
+                                yield Button("Offset -0.5s", id="lyrics-offset-minus", variant="default")
+                                yield Button("Offset +0.5s", id="lyrics-offset-plus", variant="default")
+                                yield Static("Offset letras: +0.0s", id="lyrics-offset-label")
                             yield LyricsTable(id="lyrics-table", zebra_stripes=True, cursor_type="none")
         yield Footer()
 
@@ -326,21 +333,28 @@ class YouTubeMusicSearch(
             self._lyrics_task.cancel()
             self._lyrics_task = None
         self._lyrics_video_id = None
+        self._lyrics_target_duration = None
         self._lyrics_lines = []
         self._synced_lyrics = []
+        self._synced_lyrics_base = []
         self._current_lyric_index = -1
+        self._lyrics_offset = 0.0
         self._set_lyrics_loading(False)
         self._set_lyrics_status(message)
         self._show_lyrics_message(message)
+        self._update_lyrics_offset_label()
 
     def _load_lyrics(self, item: SearchResult) -> None:
         if self._lyrics_task:
             self._lyrics_task.cancel()
             self._lyrics_task = None
         self._lyrics_video_id = item.video_id
+        self._lyrics_target_duration = self._parse_duration_to_seconds(item.duration)
+        self._lyrics_offset = 0.0
         self._set_lyrics_loading(True)
         self._set_lyrics_status("Buscando letra...")
         self._show_lyrics_message("Buscando letra...")
+        self._update_lyrics_offset_label()
         if not item.video_id:
             self._set_lyrics_loading(False)
             self._set_lyrics_status("Letra no disponible para esta pista.")
@@ -383,8 +397,10 @@ class YouTubeMusicSearch(
     def _set_lyrics_text(self, lyrics: str) -> None:
         try:
             plain_lines, synced = self._parse_lyrics(lyrics)
+            normalized = self._normalize_synced_lyrics(synced, self._lyrics_target_duration)
+            self._synced_lyrics_base = normalized
+            self._apply_lyrics_offset(force_rerender=False)
             self._lyrics_lines = plain_lines
-            self._synced_lyrics = synced
             self._current_lyric_index = -1
             self._set_status(f"Letras cargadas ({len(self._lyrics_lines)} lineas)")
             self._render_lyrics_lines()
@@ -396,6 +412,7 @@ class YouTubeMusicSearch(
         if not table:
             self.call_after_refresh(lambda: self._render_lyrics_lines(active_index))
             return
+        self._update_lyrics_offset_label()
         try:
             if not table.columns:
                 table.add_columns("Tiempo", "Texto")
@@ -453,6 +470,81 @@ class YouTubeMusicSearch(
             plain_lines = [line.strip() for line in normalized.splitlines() if line.strip()]
 
         return (plain_lines, synced)
+
+    @staticmethod
+    def _normalize_synced_lyrics(
+        synced: list[dict[str, Any]], target_duration: Optional[float]
+    ) -> list[dict[str, Any]]:
+        """Ajusta timestamps para empezar en 0 y escalar a la duracion de la pista si difiere mucho."""
+        if not synced:
+            return synced
+        # Copiar para no mutar entrada.
+        adjusted = [dict(item) for item in synced]
+        last_ts = max(item.get("ts", 0.0) or 0.0 for item in adjusted)
+        if target_duration and last_ts > 1.0:
+            scale = float(target_duration) / float(last_ts)
+            # Solo escalar si la diferencia es notable pero razonable (±40%).
+            if 0.6 <= scale <= 1.4:
+                for item in adjusted:
+                    item["ts"] = float(item.get("ts", 0.0)) * scale
+        # Recalcular etiqueta de tiempo formateada.
+        for item in adjusted:
+            item["time"] = YouTubeMusicSearch._fmt_ts(float(item.get("ts", 0.0)))
+        return adjusted
+
+    @staticmethod
+    def _parse_duration_to_seconds(duration: Optional[str]) -> Optional[float]:
+        if not duration:
+            return None
+        try:
+            parts = [int(p) for p in duration.split(":")]
+            if len(parts) == 2:
+                m, s = parts
+                return m * 60 + s
+            if len(parts) == 3:
+                h, m, s = parts
+                return h * 3600 + m * 60 + s
+        except Exception:
+            return None
+        return None
+
+    def _apply_lyrics_offset(self, force_rerender: bool = True) -> None:
+        """Aplica offset manual a las letras sincronizadas y rerenderiza."""
+        if not self._synced_lyrics_base:
+            self._synced_lyrics = []
+            if force_rerender:
+                self._render_lyrics_lines()
+            return
+        adjusted: list[dict[str, Any]] = []
+        offset = self._lyrics_offset
+        for item in self._synced_lyrics_base:
+            ts = float(item.get("ts", 0.0)) + offset
+            ts = max(0.0, ts)
+            adjusted.append({"ts": ts, "text": item.get("text", ""), "time": self._fmt_ts(ts)})
+        self._synced_lyrics = adjusted
+        if force_rerender:
+            # Forzar recalculo de highlight en el siguiente tick.
+            self._current_lyric_index = -1
+            self._render_lyrics_lines()
+
+    def _update_lyrics_offset_label(self) -> None:
+        try:
+            label = self.query_one("#lyrics-offset-label", Static)
+            label.update(f"Offset letras: {self._lyrics_offset:+.1f}s")
+        except Exception:
+            pass
+
+    @on(Button.Pressed, "#lyrics-offset-minus")
+    def _on_lyrics_offset_minus(self, _: Button.Pressed) -> None:
+        self._lyrics_offset = max(-10.0, self._lyrics_offset - 0.5)
+        self._apply_lyrics_offset()
+        self._update_lyrics_offset_label()
+
+    @on(Button.Pressed, "#lyrics-offset-plus")
+    def _on_lyrics_offset_plus(self, _: Button.Pressed) -> None:
+        self._lyrics_offset = min(10.0, self._lyrics_offset + 0.5)
+        self._apply_lyrics_offset()
+        self._update_lyrics_offset_label()
 
     def _update_synced_highlight(self, position: float) -> None:
         if not self._synced_lyrics or position is None:

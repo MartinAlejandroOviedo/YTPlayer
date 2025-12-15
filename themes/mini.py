@@ -58,6 +58,20 @@ Screen {
     color: #9ca3af;
     padding: 0 0 1 0;
 }
+#lyrics-offset-controls {
+    padding: 0 0 1 0;
+    height: 3;
+    content-align: left middle;
+}
+#lyrics-offset-controls Button {
+    width: 14;
+    height: 3;
+    margin: 0 1 0 0;
+}
+#lyrics-offset-label {
+    padding: 0 0 0 1;
+    color: #9ca3af;
+}
 #lyrics-table {
     width: 100%;
     height: 1fr;
